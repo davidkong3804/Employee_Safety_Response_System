@@ -1,0 +1,96 @@
+{
+  "app": {
+    "title": "企業安全回報系統",
+    "subtitle": "Employee Safety Response System"
+  },
+  "nav": {
+    "home": "首頁",
+    "dashboard": "儀表板",
+    "events": "事件管理",
+    "users": "使用者管理",
+    "analytics": "數據分析",
+    "logout": "登出"
+  },
+  "login": {
+    "title": "安全回報系統",
+    "employeeId": "員工編號",
+    "password": "密碼",
+    "submit": "登入",
+    "error": "帳號或密碼錯誤"
+  },
+  "report": {
+    "title": "安全回報",
+    "imSafe": "我是安全的",
+    "needHelp": "需要協助",
+    "message": "附加訊息（選填）",
+    "submitted": "回報成功！",
+    "failed": "回報失敗，請重試",
+    "alreadyReported": "您已回報",
+    "status": "您的狀態"
+  },
+  "status": {
+    "safe": "安全",
+    "need_help": "需要協助",
+    "unreported": "未回報"
+  },
+  "event": {
+    "active": "進行中",
+    "closed": "已結束",
+    "create": "建立事件",
+    "title": "事件標題",
+    "description": "描述",
+    "type": "事件類型",
+    "severity": "嚴重程度",
+    "close": "結束事件",
+    "delete": "刪除事件",
+    "types": {
+      "earthquake": "地震",
+      "fire": "火災",
+      "flood": "水災",
+      "security": "安全事件",
+      "other": "其他"
+    },
+    "severities": {
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "critical": "緊急"
+    }
+  },
+  "dashboard": {
+    "title": "安全回報儀表板",
+    "reportRate": "回報率",
+    "total": "總人數",
+    "byDepartment": "各部門統計",
+    "employeeList": "員工狀態清單",
+    "filter": "篩選",
+    "facility": "廠區",
+    "department": "部門",
+    "all": "全部",
+    "remind": "發送提醒",
+    "reminded": "已發送 {{count}} 則提醒",
+    "refreshing": "資料更新中..."
+  },
+  "peers": {
+    "title": "同仁狀態",
+    "call": "撥打電話"
+  },
+  "user": {
+    "create": "新增使用者",
+    "name": "姓名",
+    "email": "電子郵件",
+    "role": "角色",
+    "department": "部門",
+    "facility": "廠區",
+    "phone": "電話",
+    "active": "啟用",
+    "inactive": "停用"
+  },
+  "analytics": {
+    "title": "系統分析",
+    "totalEvents": "總事件數",
+    "activeEvents": "進行中事件",
+    "avgReportRate": "平均回報率",
+    "totalEmployees": "總員工數"
+  }
+}

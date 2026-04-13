@@ -1,0 +1,96 @@
+{
+  "app": {
+    "title": "Safety Response System",
+    "subtitle": "Employee Safety Response System"
+  },
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "events": "Event Management",
+    "users": "User Management",
+    "analytics": "Analytics",
+    "logout": "Logout"
+  },
+  "login": {
+    "title": "Safety Response System",
+    "employeeId": "Employee ID",
+    "password": "Password",
+    "submit": "Login",
+    "error": "Invalid employee ID or password"
+  },
+  "report": {
+    "title": "Safety Report",
+    "imSafe": "I'm Safe",
+    "needHelp": "Need Help",
+    "message": "Additional message (optional)",
+    "submitted": "Report submitted!",
+    "failed": "Report failed, please retry",
+    "alreadyReported": "You have already reported",
+    "status": "Your Status"
+  },
+  "status": {
+    "safe": "Safe",
+    "need_help": "Need Help",
+    "unreported": "Unreported"
+  },
+  "event": {
+    "active": "Active",
+    "closed": "Closed",
+    "create": "Create Event",
+    "title": "Event Title",
+    "description": "Description",
+    "type": "Event Type",
+    "severity": "Severity",
+    "close": "Close Event",
+    "delete": "Delete Event",
+    "types": {
+      "earthquake": "Earthquake",
+      "fire": "Fire",
+      "flood": "Flood",
+      "security": "Security Incident",
+      "other": "Other"
+    },
+    "severities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    }
+  },
+  "dashboard": {
+    "title": "Safety Report Dashboard",
+    "reportRate": "Report Rate",
+    "total": "Total",
+    "byDepartment": "By Department",
+    "employeeList": "Employee Status List",
+    "filter": "Filter",
+    "facility": "Facility",
+    "department": "Department",
+    "all": "All",
+    "remind": "Send Reminders",
+    "reminded": "Sent {{count}} reminders",
+    "refreshing": "Refreshing..."
+  },
+  "peers": {
+    "title": "Peer Status",
+    "call": "Call"
+  },
+  "user": {
+    "create": "Create User",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "department": "Department",
+    "facility": "Facility",
+    "phone": "Phone",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "analytics": {
+    "title": "System Analytics",
+    "totalEvents": "Total Events",
+    "activeEvents": "Active Events",
+    "avgReportRate": "Avg Report Rate",
+    "totalEmployees": "Total Employees"
+  }
+}

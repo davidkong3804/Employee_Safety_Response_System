@@ -1,0 +1,34 @@
+# Node.js
+node_modules/
+dist/
+build/
+.pnpm-store/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Backend specific
+backend/__pycache__/
+backend/venv/
+
+# Frontend specific
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
