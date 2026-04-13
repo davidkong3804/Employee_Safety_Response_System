@@ -2,12 +2,13 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_role
 from app.modules.events.models import Event
+from app.modules.notifications.models import Reminder
 from app.modules.events.schemas import EventCreate, EventResponse, EventUpdate
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
@@ -105,4 +106,7 @@ async def delete_event(
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    # Delete related records first to avoid FK constraint violations
+    await db.execute(delete(Reminder).where(Reminder.event_id == event_id))
+    await db.execute(delete(SafetyReport).where(SafetyReport.event_id == event_id))
     await db.delete(event)

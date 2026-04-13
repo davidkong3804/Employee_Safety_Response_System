@@ -104,3 +104,4 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.is_active = False
+    await db.flush()
