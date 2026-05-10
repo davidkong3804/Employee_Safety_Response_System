@@ -11,7 +11,8 @@ test.describe('Employee Workflow', () => {
 
   test('employee can navigate to submit report page', async ({ employeePage: page }) => {
     await page.goto('/')
-    const reportLink = page.getByRole('link', { name: /report|回報/i }).first()
+    // Use href to avoid matching the nav title "企業安全回報系統" which also contains "回報"
+    const reportLink = page.locator('a[href*="/events/"][href*="/report"]').first()
     if (await reportLink.isVisible()) {
       await reportLink.click()
       await expect(page).toHaveURL(/report/)
