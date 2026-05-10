@@ -32,3 +32,18 @@ frontend/node_modules/
 frontend/dist/
 frontend/build/
 frontend/.next/
+frontend/coverage/
+frontend/htmlcov/
+
+# Backend test output
+backend/htmlcov/
+backend/coverage.xml
+backend/.coverage
+
+# E2E test output
+tests/e2e/node_modules/
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+
+# Performance test reports
+tests/performance/reports/
