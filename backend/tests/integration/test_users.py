@@ -77,7 +77,7 @@ class TestCreateUser:
             },
             headers=admin_headers,
         )
-        assert r.status_code in (400, 409, 500)
+        assert r.status_code == 409
 
     async def test_missing_required_field_returns_422(self, client, admin_headers):
         r = await client.post(

@@ -33,7 +33,7 @@ def create_access_token(user_id: str) -> str:
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.employee_id == data.employee_id))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(data.password, user.password_hash):
+    if not user or not user.is_active or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect employee ID or password",
