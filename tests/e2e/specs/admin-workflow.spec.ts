@@ -54,9 +54,9 @@ test.describe('Admin Workflow – Event Lifecycle', () => {
     // Verify event appears in list
     await expect(page.getByText(eventTitle)).toBeVisible({ timeout: 8_000 })
 
-    // Close the event
+    // Close the event — use .first() on button to avoid strict mode error when multiple rows match
     const row = page.locator(`tr, li, div`).filter({ hasText: eventTitle }).first()
-    const closeBtn = row.getByRole('button', { name: /close|關閉/i })
+    const closeBtn = row.getByRole('button', { name: /close|關閉/i }).first()
     if (await closeBtn.isVisible()) {
       await closeBtn.click()
       await page.waitForLoadState('networkidle')
@@ -66,6 +66,7 @@ test.describe('Admin Workflow – Event Lifecycle', () => {
     const deleteBtn = page.locator(`tr, li, div`).filter({ hasText: eventTitle })
       .first()
       .getByRole('button', { name: /delete|刪除/i })
+      .first()
     if (await deleteBtn.isVisible()) {
       await deleteBtn.click()
       await page.waitForLoadState('networkidle')

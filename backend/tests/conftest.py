@@ -1,4 +1,3 @@
-import asyncio
 import os
 from contextlib import asynccontextmanager
 
@@ -32,22 +31,28 @@ app.router.lifespan_context = _noop_lifespan
 TEST_DATABASE_URL = _test_db_url
 
 
-@pytest_asyncio.fixture(scope="session")
-async def test_engine():
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def setup_database():
+    """Create tables once per session. Engine is disposed immediately so no asyncpg
+    connection persists into the per-test (function-scoped) event loop."""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-    yield engine
+    await engine.dispose()
+    yield
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
 
 
 @pytest_asyncio.fixture()
-async def db_session(test_engine):
-    """Each test gets a session bound to an uncommitted transaction that is rolled back after."""
-    connection = await test_engine.connect()
+async def db_session(setup_database):
+    """Per-test engine+connection ensures asyncpg runs in the same function-scoped
+    event loop as the test itself, preventing cross-loop Future errors."""
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    connection = await engine.connect()
     trans = await connection.begin()
     session = AsyncSession(bind=connection, expire_on_commit=False)
     try:
@@ -56,6 +61,7 @@ async def db_session(test_engine):
         await session.close()
         await trans.rollback()
         await connection.close()
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture()

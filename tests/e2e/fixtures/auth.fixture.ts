@@ -4,7 +4,7 @@ async function loginAs(page: Page, employeeId: string, password = 'password123')
   await page.goto('/login')
   await page.getByPlaceholder('A001 / M001 / E001').fill(employeeId)
   await page.getByPlaceholder('password123').fill(password)
-  await page.getByRole('button', { name: 'Login' }).click()
+  await page.getByRole('button', { name: /login|登入/i }).click()
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 10_000 })
 }
 
