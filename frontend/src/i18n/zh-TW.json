@@ -1,4 +1,7 @@
 {
+  "common": {
+    "actions": "操作"
+  },
   "app": {
     "title": "企業安全回報系統",
     "subtitle": "Employee Safety Response System"
@@ -45,6 +48,12 @@
     "allFacilities": "全廠區",
     "close": "結束事件",
     "delete": "刪除事件",
+    "noEvents": "目前無進行中的事件",
+    "createdAt": "建立時間",
+    "createSuccess": "事件建立成功",
+    "createFailed": "事件建立失敗",
+    "closeSuccess": "事件已結束",
+    "deleteSuccess": "事件已刪除",
     "types": {
       "earthquake": "地震",
       "fire": "火災",
@@ -71,11 +80,13 @@
     "all": "全部",
     "remind": "發送提醒",
     "reminded": "已發送 {{count}} 則提醒",
-    "refreshing": "資料更新中..."
+    "refreshing": "資料更新中...",
+    "remindFailed": "發送提醒失敗"
   },
   "peers": {
     "title": "同仁狀態",
-    "call": "撥打電話"
+    "call": "撥打電話",
+    "noData": "目前無團隊資料"
   },
   "user": {
     "create": "新增使用者",
@@ -86,13 +97,18 @@
     "facility": "廠區",
     "phone": "電話",
     "active": "啟用",
-    "inactive": "停用"
+    "inactive": "停用",
+    "createSuccess": "使用者已新增",
+    "createFailed": "新增使用者失敗",
+    "deactivateSuccess": "使用者已停用"
   },
   "analytics": {
     "title": "系統分析",
     "totalEvents": "總事件數",
     "activeEvents": "進行中事件",
     "avgReportRate": "平均回報率",
-    "totalEmployees": "總員工數"
+    "totalEmployees": "總員工數",
+    "reportByEvent": "各事件回報狀態",
+    "overallDistribution": "整體狀態分佈"
   }
 }

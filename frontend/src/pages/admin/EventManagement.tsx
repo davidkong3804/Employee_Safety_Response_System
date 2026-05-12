@@ -22,24 +22,24 @@ export default function EventManagement() {
     e.preventDefault()
     try {
       await createEvent({ ...form, facility: form.facility || undefined })
-      toast.success('Event created')
+      toast.success(t('event.createSuccess'))
       setShowCreate(false)
       setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high', facility: '' })
       load()
     } catch {
-      toast.error('Failed to create event')
+      toast.error(t('event.createFailed'))
     }
   }
 
   const handleClose = async (id: string) => {
     await updateEvent(id, { status: 'closed' })
-    toast.success('Event closed')
+    toast.success(t('event.closeSuccess'))
     load()
   }
 
   const handleDelete = async (id: string) => {
     await deleteEvent(id)
-    toast.success('Event deleted')
+    toast.success(t('event.deleteSuccess'))
     load()
   }
 
@@ -131,9 +131,9 @@ export default function EventManagement() {
               <th className="px-4 py-3">{t('event.type')}</th>
               <th className="px-4 py-3">{t('event.severity')}</th>
               <th className="px-4 py-3">{t('event.facility')}</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3">Actions</th>
+              <th className="px-4 py-3">{t('report.status')}</th>
+              <th className="px-4 py-3">{t('event.createdAt')}</th>
+              <th className="px-4 py-3">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">

@@ -121,7 +121,7 @@ export default function Home() {
       {events.length === 0 && (
         <div className="text-center py-16 text-gray-400">
           <CheckCircle className="w-16 h-16 mx-auto mb-4" />
-          <p className="text-lg">No active events</p>
+          <p className="text-lg">{t('event.noEvents')}</p>
         </div>
       )}
     </div>
