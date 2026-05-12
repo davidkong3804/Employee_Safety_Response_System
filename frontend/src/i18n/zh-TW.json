@@ -110,5 +110,20 @@
     "totalEmployees": "總員工數",
     "reportByEvent": "各事件回報狀態",
     "overallDistribution": "整體狀態分佈"
+  },
+  "facility": {
+    "selectFacilities": "選擇受影響廠區",
+    "taiwan": "台灣",
+    "hsinchu": "新竹",
+    "zhunan": "苗栗竹南",
+    "taichung": "台中",
+    "tainan": "台南",
+    "kaohsiung": "高雄",
+    "usa": "美國",
+    "arizona": "亞利桑那州",
+    "japan": "日本",
+    "kumamoto": "熊本縣",
+    "germany": "德國",
+    "dresden": "薩克森・德勒斯登"
   }
 }

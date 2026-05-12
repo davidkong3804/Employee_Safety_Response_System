@@ -110,5 +110,20 @@
     "totalEmployees": "Total Employees",
     "reportByEvent": "Report Status by Event",
     "overallDistribution": "Overall Status Distribution"
+  },
+  "facility": {
+    "selectFacilities": "Select Affected Facilities",
+    "taiwan": "Taiwan",
+    "hsinchu": "Hsinchu",
+    "zhunan": "Miaoli / Zhunan",
+    "taichung": "Taichung",
+    "tainan": "Tainan",
+    "kaohsiung": "Kaohsiung",
+    "usa": "United States",
+    "arizona": "Arizona",
+    "japan": "Japan",
+    "kumamoto": "Kumamoto",
+    "germany": "Germany",
+    "dresden": "Saxony / Dresden"
   }
 }

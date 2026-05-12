@@ -21,12 +21,12 @@ class TestListEvents:
         # Create a TestFab event (matches employee_user.facility)
         testfab_event = EventModel(
             title="TestFab Event", event_type="earthquake", severity="high",
-            status="active", facility="TestFab", created_by=admin_user.id,
+            status="active", facility=["TestFab"], created_by=admin_user.id,
         )
         # Create an OtherFab event (should NOT be visible to employee)
         otherfab_event = EventModel(
             title="OtherFab Event", event_type="fire", severity="low",
-            status="active", facility="OtherFab", created_by=admin_user.id,
+            status="active", facility=["OtherFab"], created_by=admin_user.id,
         )
         # Create a cross-facility event (visible to all)
         global_event = EventModel(
@@ -119,12 +119,12 @@ class TestCreateEvent:
         # facility="TestFab" → only TestFab users get placeholders, OtherFab excluded
         r = await client.post(
             "/api/events",
-            json={"title": "Facility Test", "event_type": "earthquake", "severity": "high", "facility": "TestFab"},
+            json={"title": "Facility Test", "event_type": "earthquake", "severity": "high", "facility": ["TestFab"]},
             headers=admin_headers,
         )
         assert r.status_code == 201
         data = r.json()
-        assert data["facility"] == "TestFab"
+        assert data["facility"] == ["TestFab"]
         event_id = data["id"]
 
         result = await db_session.execute(

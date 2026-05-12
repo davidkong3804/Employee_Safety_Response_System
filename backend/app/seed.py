@@ -110,7 +110,7 @@ async def seed_data():
             event_type="earthquake",
             severity="high",
             status="active",
-            facility="Fab14",
+            facility=["Fab14"],
             created_by=admins[0].id,
         )
         session.add(event1)
