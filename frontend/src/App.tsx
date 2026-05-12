@@ -11,6 +11,21 @@ import EventManagement from './pages/admin/EventManagement'
 import UserManagement from './pages/admin/UserManagement'
 import Analytics from './pages/admin/Analytics'
 
+function RoleRedirect() {
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900" />
+      </div>
+    )
+  }
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'admin') return <Navigate to="/admin/events" replace />
+  if (user.role === 'manager') return <Navigate to="/dashboard" replace />
+  return <Navigate to="/home" replace />
+}
+
 export default function App() {
   const { user } = useAuth()
 
@@ -20,15 +35,17 @@ export default function App() {
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
 
-        <Route path="/" element={
-          <ProtectedRoute><Home /></ProtectedRoute>
+        <Route path="/" element={<RoleRedirect />} />
+
+        <Route path="/home" element={
+          <ProtectedRoute roles={['employee']}><Home /></ProtectedRoute>
         } />
 
-        <Route path="/events/:eventId/report" element={
+        <Route path="/report/:eventId" element={
           <ProtectedRoute><ReportPage /></ProtectedRoute>
         } />
 
-        <Route path="/events/:eventId/peers" element={
+        <Route path="/peers/:eventId" element={
           <ProtectedRoute><PeerStatus /></ProtectedRoute>
         } />
 

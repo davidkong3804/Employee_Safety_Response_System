@@ -42,20 +42,25 @@ sequenceDiagram
     Admin->>Frontend: Fill event form (title, type, severity)
     Frontend->>Backend: POST /api/events (Admin JWT)
     Backend->>Backend: Verify JWT + role == admin
-    Backend->>DB: INSERT INTO events (title, type, severity, ...)
+    Backend->>DB: INSERT INTO events (title, type, severity, facility, ...)
     DB-->>Backend: New event record
 
-    Backend->>DB: SELECT * FROM users WHERE is_active = true
-    DB-->>Backend: All active users (38 records)
+    alt facility is specified (e.g. "Fab14")
+        Backend->>DB: SELECT * FROM users WHERE is_active = true AND facility = 'Fab14'
+        DB-->>Backend: Fab14 users only
+    else no facility (cross-facility event)
+        Backend->>DB: SELECT * FROM users WHERE is_active = true
+        DB-->>Backend: All active users (38 records)
+    end
 
-    loop For each active user
+    loop For each matching user
         Backend->>DB: INSERT INTO safety_reports (event_id, user_id, status=NULL)
     end
 
     Backend-->>Frontend: 201 {event data}
     Frontend->>Admin: Show success, redirect to event list
 
-    Note over Backend,DB: All employees now have "unreported" status for this event
+    Note over Backend,DB: Only employees in the affected facility have "unreported" status
 ```
 
 ## 3. Employee Safety Report Flow (Core Use Case)

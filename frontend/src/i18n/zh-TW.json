@@ -41,6 +41,8 @@
     "description": "描述",
     "type": "事件類型",
     "severity": "嚴重程度",
+    "facility": "受影響廠區",
+    "allFacilities": "全廠區",
     "close": "結束事件",
     "delete": "刪除事件",
     "types": {

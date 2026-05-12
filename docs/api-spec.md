@@ -64,8 +64,29 @@ List all events (active first, then by created_at desc).
 
 **Auth:** Any authenticated user
 
+### GET /api/events/{event_id}
+Get a single event by ID.
+
+**Auth:** Any authenticated user
+
+**Response 200:**
+```json
+{
+  "id": "uuid",
+  "title": "2026-04-13 台南地震警報",
+  "description": "...",
+  "event_type": "earthquake",
+  "severity": "high",
+  "status": "active",
+  "facility": "Fab14",
+  "created_by": "uuid",
+  "created_at": "2026-04-13T10:00:00Z",
+  "closed_at": null
+}
+```
+
 ### POST /api/events
-Create a new emergency event. Automatically generates safety_report records for all active users.
+Create a new emergency event. Automatically generates safety_report records for active users in the affected facility (or all facilities if `facility` is omitted).
 
 **Auth:** Admin only
 
@@ -75,9 +96,12 @@ Create a new emergency event. Automatically generates safety_report records for 
   "title": "2026-04-13 Earthquake",
   "description": "Please report your safety status immediately.",
   "event_type": "earthquake",
-  "severity": "high"
+  "severity": "high",
+  "facility": "Fab14"
 }
 ```
+
+> `facility` is optional. Omit or set to `null` to create a cross-facility event targeting all employees.
 
 ### PATCH /api/events/{event_id}
 Update event details or close event.
@@ -195,9 +219,24 @@ Trigger reminders for all unreported employees.
 ```
 
 ### GET /api/events/{event_id}/reminders
-Get reminder history for this event.
+Get reminder history for this event (who was reminded and how many times).
 
 **Auth:** Manager or Admin
+
+**Response 200:**
+```json
+[
+  {
+    "id": "uuid",
+    "event_id": "uuid",
+    "user_id": "uuid",
+    "user_name": "蔡明軒",
+    "employee_id": "E001",
+    "reminder_count": 2,
+    "last_reminded": "2026-04-13T10:30:00Z"
+  }
+]
+```
 
 ---
 

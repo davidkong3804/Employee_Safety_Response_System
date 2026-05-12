@@ -155,6 +155,24 @@ def employee_headers(employee_user) -> dict:
 # ---------------------------------------------------------------------------
 
 @pytest_asyncio.fixture()
+async def employee_other_fab(db_session, manager_user) -> User:
+    user = User(
+        employee_id="TEST_E002",
+        name="Other Fab Employee",
+        email="test.otherfab@example.com",
+        password_hash=hash_password("testpassword"),
+        role="employee",
+        department="Engineering",
+        facility="OtherFab",
+        manager_id=manager_user.id,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+@pytest_asyncio.fixture()
 async def active_event(db_session, admin_user, manager_user, employee_user) -> Event:
     event = Event(
         title="Test Earthquake Event",
@@ -162,6 +180,7 @@ async def active_event(db_session, admin_user, manager_user, employee_user) -> E
         event_type="earthquake",
         severity="high",
         status="active",
+        facility="TestFab",
         created_by=admin_user.id,
     )
     db_session.add(event)
