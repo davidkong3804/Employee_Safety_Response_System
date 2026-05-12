@@ -48,6 +48,7 @@
     "allFacilities": "全廠區",
     "close": "結束事件",
     "delete": "刪除事件",
+    "statusLabel": "事件狀態",
     "noEvents": "目前無進行中的事件",
     "createdAt": "建立時間",
     "createSuccess": "事件建立成功",

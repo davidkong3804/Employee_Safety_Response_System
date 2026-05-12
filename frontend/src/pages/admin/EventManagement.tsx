@@ -128,13 +128,13 @@ export default function EventManagement() {
         <table className="w-full">
           <thead className="bg-gray-50 text-left text-sm text-gray-500">
             <tr>
-              <th className="px-4 py-3">{t('event.title')}</th>
-              <th className="px-4 py-3">{t('event.type')}</th>
-              <th className="px-4 py-3">{t('event.severity')}</th>
-              <th className="px-4 py-3">{t('event.facility')}</th>
-              <th className="px-4 py-3">{t('report.status')}</th>
-              <th className="px-4 py-3">{t('event.createdAt')}</th>
-              <th className="px-4 py-3">{t('common.actions')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.title')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.type')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.severity')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.facility')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.statusLabel')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.createdAt')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">

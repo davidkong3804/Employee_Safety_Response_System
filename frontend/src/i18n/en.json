@@ -48,6 +48,7 @@
     "allFacilities": "All Facilities",
     "close": "Close Event",
     "delete": "Delete Event",
+    "statusLabel": "Status",
     "noEvents": "No active events",
     "createdAt": "Created",
     "createSuccess": "Event created",
