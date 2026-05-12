@@ -32,14 +32,16 @@ interface Props {
   onChange: (fabs: string[]) => void
 }
 
-function IndeterminateCheckbox({
+function Checkbox({
   checked,
-  indeterminate,
+  indeterminate = false,
+  disabled = false,
   onChange,
   onClick,
 }: {
   checked: boolean
-  indeterminate: boolean
+  indeterminate?: boolean
+  disabled?: boolean
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onClick?: (e: React.MouseEvent<HTMLInputElement>) => void
 }) {
@@ -50,9 +52,10 @@ function IndeterminateCheckbox({
       ref={ref}
       type="checkbox"
       checked={checked}
+      disabled={disabled}
       onChange={onChange}
       onClick={onClick}
-      className="w-4 h-4 accent-blue-900 cursor-pointer"
+      className="w-4 h-4 accent-blue-900 shrink-0 disabled:cursor-not-allowed"
     />
   )
 }
@@ -61,11 +64,10 @@ export default function FacilitySelector({ value, onChange }: Props) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
+  const isAll = value.length === 0
+
   const toggle = (key: string) =>
     setExpanded(p => ({ ...p, [key]: !p[key] }))
-
-  const toggleFab = (fab: string) =>
-    onChange(value.includes(fab) ? value.filter(f => f !== fab) : [...value, fab])
 
   const toggleGroup = (fabs: string[]) => {
     const allSelected = fabs.every(f => value.includes(f))
@@ -76,23 +78,26 @@ export default function FacilitySelector({ value, onChange }: Props) {
     )
   }
 
+  const toggleFab = (fab: string) =>
+    onChange(value.includes(fab) ? value.filter(f => f !== fab) : [...value, fab])
+
   return (
     <div className="border rounded-lg overflow-hidden text-sm">
-      {/* All Facilities option */}
-      <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b cursor-pointer hover:bg-gray-100">
+      {/* 全廠區 */}
+      <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-b cursor-pointer hover:bg-gray-100 select-none">
         <input
           type="checkbox"
-          checked={value.length === 0}
+          checked={isAll}
           onChange={() => onChange([])}
-          className="w-4 h-4 accent-blue-900 cursor-pointer"
+          className="w-4 h-4 accent-blue-900 cursor-pointer shrink-0"
         />
-        <span className="font-medium">{t('event.allFacilities')}</span>
+        <span className="font-semibold">{t('event.allFacilities')}</span>
       </label>
 
       {FACILITIES.map(country => {
         const countryFabs = country.regions.flatMap(r => r.fabs)
-        const allCountry = countryFabs.every(f => value.includes(f))
-        const someCountry = countryFabs.some(f => value.includes(f))
+        const allCountry = isAll || countryFabs.every(f => value.includes(f))
+        const someCountry = !isAll && countryFabs.some(f => value.includes(f))
         const countryOpen = expanded[country.key]
 
         return (
@@ -105,55 +110,60 @@ export default function FacilitySelector({ value, onChange }: Props) {
               {countryOpen
                 ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                 : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
-              <IndeterminateCheckbox
+              <Checkbox
                 checked={allCountry}
                 indeterminate={someCountry && !allCountry}
+                disabled={isAll}
                 onChange={e => { e.stopPropagation(); toggleGroup(countryFabs) }}
                 onClick={e => e.stopPropagation()}
               />
               <span className="font-semibold">{t(`facility.${country.key}`)}</span>
-              <span className="ml-auto text-xs text-gray-400">{countryFabs.join(', ')}</span>
+              <span className="text-xs text-gray-400 ml-1.5">({countryFabs.length} fabs)</span>
             </div>
 
             {countryOpen && country.regions.map(region => {
-              const allRegion = region.fabs.every(f => value.includes(f))
-              const someRegion = region.fabs.some(f => value.includes(f))
+              const allRegion = isAll || region.fabs.every(f => value.includes(f))
+              const someRegion = !isAll && region.fabs.some(f => value.includes(f))
               const regionKey = `${country.key}-${region.key}`
               const regionOpen = expanded[regionKey]
 
               return (
-                <div key={region.key} className="ml-6 border-t border-gray-100">
+                <div key={region.key} className="ml-7 border-t border-gray-100">
                   {/* Region row */}
                   <div
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/60 hover:bg-gray-100 cursor-pointer select-none"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/70 hover:bg-gray-100 cursor-pointer select-none"
                     onClick={() => toggle(regionKey)}
                   >
                     {regionOpen
                       ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
                       : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />}
-                    <IndeterminateCheckbox
+                    <Checkbox
                       checked={allRegion}
                       indeterminate={someRegion && !allRegion}
+                      disabled={isAll}
                       onChange={e => { e.stopPropagation(); toggleGroup(region.fabs) }}
                       onClick={e => e.stopPropagation()}
                     />
                     <span className="text-gray-700">{t(`facility.${region.key}`)}</span>
-                    <span className="ml-auto text-xs text-gray-400">{region.fabs.join(', ')}</span>
+                    <span className="text-xs text-gray-400 ml-1.5">{region.fabs.join(', ')}</span>
                   </div>
 
                   {/* Individual fabs */}
                   {regionOpen && (
-                    <div className="ml-6 py-1 space-y-0.5 border-t border-gray-100">
+                    <div className="ml-6 py-1 border-t border-gray-100">
                       {region.fabs.map(fab => (
                         <label
                           key={fab}
-                          className="flex items-center gap-2 px-3 py-1 hover:bg-gray-50 cursor-pointer rounded"
+                          className={`flex items-center gap-2 px-3 py-1 rounded ${
+                            isAll ? 'cursor-not-allowed opacity-70' : 'hover:bg-gray-50 cursor-pointer'
+                          }`}
                         >
                           <input
                             type="checkbox"
-                            checked={value.includes(fab)}
+                            checked={isAll || value.includes(fab)}
+                            disabled={isAll}
                             onChange={() => toggleFab(fab)}
-                            className="w-4 h-4 accent-blue-900 cursor-pointer"
+                            className="w-4 h-4 accent-blue-900 shrink-0 disabled:cursor-not-allowed"
                           />
                           <span className="font-mono">{fab}</span>
                         </label>
