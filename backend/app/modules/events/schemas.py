@@ -8,6 +8,7 @@ class EventCreate(BaseModel):
     description: str | None = None
     event_type: str
     severity: str
+    facility: str | None = None
 
 
 class EventUpdate(BaseModel):
@@ -24,6 +25,7 @@ class EventResponse(BaseModel):
     event_type: str
     severity: str
     status: str
+    facility: str | None
     created_by: str
     created_at: datetime
     closed_at: datetime | None
