@@ -147,9 +147,9 @@
 - [x] Close event (sets closed_at timestamp)
 - [x] Delete event (cascades to reports and reminders)
 - [x] Event list shows status badges (active/closed)
-- [ ] Create event with facility scope (Fab14 / Fab18 / all facilities)
-- [ ] Event creation auto-generates report records only for employees in the affected facility (all if no facility set)
-- [ ] Employee home page only shows events relevant to their facility (plus cross-facility events)
+- [x] Create event with facility scope (Fab14 / Fab18 / all facilities)
+- [x] Event creation auto-generates report records only for employees in the affected facility (all if no facility set)
+- [x] Employee home page only shows events relevant to their facility (plus cross-facility events)
 
 ### Implementation
 - **Frontend**: `src/pages/admin/EventManagement.tsx`
