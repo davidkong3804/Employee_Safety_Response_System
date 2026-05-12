@@ -65,6 +65,7 @@ export default function FacilitySelector({ value, onChange }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
   const isAll = value.length === 0
+  const allFabs = FACILITIES.flatMap(c => c.regions.flatMap(r => r.fabs))
 
   const toggle = (key: string) =>
     setExpanded(p => ({ ...p, [key]: !p[key] }))
@@ -88,7 +89,7 @@ export default function FacilitySelector({ value, onChange }: Props) {
         <input
           type="checkbox"
           checked={isAll}
-          onChange={() => onChange([])}
+          onChange={() => isAll ? onChange(allFabs) : onChange([])}
           className="w-4 h-4 accent-blue-900 cursor-pointer shrink-0"
         />
         <span className="font-semibold">{t('event.allFacilities')}</span>
