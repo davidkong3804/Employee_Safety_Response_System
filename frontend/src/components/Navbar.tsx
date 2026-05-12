@@ -29,9 +29,7 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-4">
-            {user.role === 'employee' && (
-              <Link to="/home" className="hover:text-yellow-300 transition">{t('nav.home')}</Link>
-            )}
+            <Link to="/" className="hover:text-yellow-300 transition">{t('nav.home')}</Link>
 
             {(user.role === 'manager' || user.role === 'admin') && (
               <Link to="/dashboard" className="hover:text-yellow-300 transition">{t('nav.dashboard')}</Link>

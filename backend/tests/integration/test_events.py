@@ -13,36 +13,6 @@ class TestListEvents:
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
-    async def test_employee_sees_only_own_facility_events(
-        self, client, employee_headers, employee_user, admin_headers, admin_user, db_session
-    ):
-        from app.modules.events.models import Event as EventModel
-
-        # Create a TestFab event (matches employee_user.facility)
-        testfab_event = EventModel(
-            title="TestFab Event", event_type="earthquake", severity="high",
-            status="active", facility="TestFab", created_by=admin_user.id,
-        )
-        # Create an OtherFab event (should NOT be visible to employee)
-        otherfab_event = EventModel(
-            title="OtherFab Event", event_type="fire", severity="low",
-            status="active", facility="OtherFab", created_by=admin_user.id,
-        )
-        # Create a cross-facility event (visible to all)
-        global_event = EventModel(
-            title="Global Event", event_type="flood", severity="medium",
-            status="active", facility=None, created_by=admin_user.id,
-        )
-        db_session.add_all([testfab_event, otherfab_event, global_event])
-        await db_session.flush()
-
-        r = await client.get("/api/events", headers=employee_headers)
-        assert r.status_code == 200
-        titles = {e["title"] for e in r.json()}
-        assert "TestFab Event" in titles
-        assert "Global Event" in titles
-        assert "OtherFab Event" not in titles
-
     async def test_active_events_come_before_closed(self, client, active_event, admin_headers, db_session):
         from app.modules.events.models import Event
         from datetime import datetime, timezone
@@ -97,7 +67,6 @@ class TestCreateEvent:
     async def test_create_event_generates_report_for_every_active_user(
         self, client, admin_headers, admin_user, manager_user, employee_user, db_session
     ):
-        # No facility → all active users get a report placeholder
         r = await client.post(
             "/api/events",
             json={"title": "Report Gen Test", "event_type": "fire", "severity": "medium"},
@@ -110,30 +79,8 @@ class TestCreateEvent:
             select(SafetyReport).where(SafetyReport.event_id == event_id)
         )
         reports = result.scalars().all()
-        assert len(reports) == 3  # admin + manager + employee (all TestFab)
+        assert len(reports) == 3  # admin + manager + employee
         assert all(rep.status is None for rep in reports)
-
-    async def test_create_event_with_facility_filters_users(
-        self, client, admin_headers, admin_user, manager_user, employee_user, employee_other_fab, db_session
-    ):
-        # facility="TestFab" → only TestFab users get placeholders, OtherFab excluded
-        r = await client.post(
-            "/api/events",
-            json={"title": "Facility Test", "event_type": "earthquake", "severity": "high", "facility": "TestFab"},
-            headers=admin_headers,
-        )
-        assert r.status_code == 201
-        data = r.json()
-        assert data["facility"] == "TestFab"
-        event_id = data["id"]
-
-        result = await db_session.execute(
-            select(SafetyReport).where(SafetyReport.event_id == event_id)
-        )
-        reports = result.scalars().all()
-        user_ids = {str(rep.user_id) for rep in reports}
-        assert str(employee_other_fab.id) not in user_ids
-        assert str(employee_user.id) in user_ids
 
     async def test_inactive_user_excluded_from_auto_reports(
         self, client, admin_headers, admin_user, manager_user, employee_user, db_session

@@ -35,7 +35,7 @@ export default function PeerStatus() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <button onClick={() => navigate('/home')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 mb-6">
+      <button onClick={() => navigate('/')} className="flex items-center gap-1 text-gray-500 hover:text-gray-800 mb-6">
         <ArrowLeft className="w-5 h-5" />
         {t('nav.home')}
       </button>

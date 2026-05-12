@@ -103,39 +103,34 @@ async def seed_data():
         all_users = admins + managers + employees
 
         # --- Create Events ---
-        # Event 1: Active earthquake event scoped to Fab14
+        # Event 1: Active earthquake event
         event1 = Event(
             title="2026-04-13 台南地震警報",
-            description="台南地區發生規模5.2地震，請 Fab14 全體員工立即回報安全狀態。",
+            description="台南地區發生規模5.2地震，請全體員工立即回報安全狀態。",
             event_type="earthquake",
             severity="high",
             status="active",
-            facility="Fab14",
             created_by=admins[0].id,
         )
         session.add(event1)
 
-        # Event 2: Closed fire drill - cross-facility (all employees)
+        # Event 2: Closed fire drill
         event2 = Event(
-            title="2026-03-20 全廠消防演習",
+            title="2026-03-20 消防演習",
             description="年度消防演習已結束，感謝各位配合。",
             event_type="fire",
             severity="medium",
             status="closed",
-            facility=None,
             created_by=admins[0].id,
             closed_at=datetime.now(timezone.utc) - timedelta(days=24),
         )
         session.add(event2)
         await session.flush()
 
-        # Fab14 users only (for event1)
-        fab14_users = [u for u in all_users if u.facility == "Fab14"]
-
         # --- Create Safety Reports ---
-        # Event 1 (active, Fab14 only): partial reporting
+        # Event 1 (active): partial reporting - some safe, some need help, many unreported
         random.seed(42)
-        for user in fab14_users:
+        for user in all_users:
             report = SafetyReport(event_id=event1.id, user_id=user.id)
             # ~40% reported safe, ~5% need help, ~55% unreported
             roll = random.random()
@@ -152,7 +147,7 @@ async def seed_data():
                 report.reported_at = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 20))
             session.add(report)
 
-        # Event 2 (closed, all facilities): almost everyone reported
+        # Event 2 (closed): almost everyone reported
         for user in all_users:
             report = SafetyReport(event_id=event2.id, user_id=user.id)
             roll = random.random()

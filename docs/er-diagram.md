@@ -26,7 +26,6 @@ erDiagram
         varchar(50) event_type "earthquake | fire | flood | security | other"
         enum severity "low | medium | high | critical"
         enum status "active | closed"
-        varchar(50) facility "Fab14 | Fab18 | NULL=全廠區"
         uuid created_by FK
         timestamp created_at
         timestamp closed_at
@@ -71,8 +70,7 @@ The central entity representing all system users across three roles.
 Emergency events created by administrators.
 - **Lifecycle**: `active` → `closed` (sets `closed_at` timestamp)
 - **Types**: earthquake, fire, flood, security, other
-- **Facility scoping**: `facility = NULL` means all facilities; `facility = "Fab14"` means Fab14 only
-- **On creation**: automatically generates one `safety_report` record per active user **in the affected facility** (or all facilities if `facility` is NULL)
+- **On creation**: automatically generates one `safety_report` record per active user
 
 ### safety_reports
 Core reporting table with one record per user per event.

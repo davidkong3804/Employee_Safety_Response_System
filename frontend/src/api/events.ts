@@ -16,7 +16,6 @@ export async function createEvent(payload: {
   description?: string
   event_type: string
   severity: string
-  facility?: string
 }) {
   const { data } = await client.post('/api/events', payload)
   return data as Event

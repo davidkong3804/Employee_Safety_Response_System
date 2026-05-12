@@ -41,8 +41,6 @@
     "description": "Description",
     "type": "Event Type",
     "severity": "Severity",
-    "facility": "Affected Facility",
-    "allFacilities": "All Facilities",
     "close": "Close Event",
     "delete": "Delete Event",
     "types": {

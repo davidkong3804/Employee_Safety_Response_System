@@ -10,7 +10,7 @@ export default function EventManagement() {
   const [events, setEvents] = useState<Event[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high', facility: '' })
+  const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high' })
 
   const load = () => {
     listEvents().then(setEvents).finally(() => setLoading(false))
@@ -21,10 +21,10 @@ export default function EventManagement() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await createEvent({ ...form, facility: form.facility || undefined })
+      await createEvent(form)
       toast.success('Event created')
       setShowCreate(false)
-      setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high', facility: '' })
+      setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high' })
       load()
     } catch {
       toast.error('Failed to create event')
@@ -106,14 +106,6 @@ export default function EventManagement() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">{t('event.facility')}</label>
-                <select value={form.facility} onChange={e => setForm({...form, facility: e.target.value})} className="w-full px-3 py-2 border rounded-lg">
-                  <option value="">{t('event.allFacilities')}</option>
-                  <option value="Fab14">Fab14</option>
-                  <option value="Fab18">Fab18</option>
-                </select>
-              </div>
               <button type="submit" className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition">
                 {t('event.create')}
               </button>
@@ -130,7 +122,6 @@ export default function EventManagement() {
               <th className="px-4 py-3">{t('event.title')}</th>
               <th className="px-4 py-3">{t('event.type')}</th>
               <th className="px-4 py-3">{t('event.severity')}</th>
-              <th className="px-4 py-3">{t('event.facility')}</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3">Actions</th>
@@ -147,7 +138,6 @@ export default function EventManagement() {
                 </td>
                 <td className="px-4 py-3 text-sm">{t(`event.types.${ev.event_type}`)}</td>
                 <td className="px-4 py-3">{severityBadge(ev.severity)}</td>
-                <td className="px-4 py-3 text-sm">{ev.facility ?? t('event.allFacilities')}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                     ev.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
