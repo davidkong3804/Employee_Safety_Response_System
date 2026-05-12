@@ -80,13 +80,13 @@ export default function Home() {
 
                 <div className="flex gap-3 mt-4">
                   <Link
-                    to={`/events/${event.id}/report`}
+                    to={`/report/${event.id}`}
                     className="flex-1 text-center py-3 bg-blue-900 text-white rounded-lg font-medium hover:bg-blue-800 transition text-lg"
                   >
                     {t('report.title')}
                   </Link>
                   <Link
-                    to={`/events/${event.id}/peers`}
+                    to={`/peers/${event.id}`}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition"
                   >
                     <Users className="w-5 h-5" />
