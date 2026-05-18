@@ -6,7 +6,7 @@ from sqlalchemy import any_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import require_role
+from app.dependencies import get_optional_user, require_role
 from app.modules.events.models import Event
 from app.modules.notifications.models import Reminder
 from app.modules.events.schemas import EventCreate, EventResponse, EventUpdate
