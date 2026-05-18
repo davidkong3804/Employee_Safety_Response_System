@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import axios from 'axios'
+import { AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
 
 // We test the interceptor behaviour by inspecting how the module sets up axios
 // We use a fresh import per test by resetting modules
@@ -17,7 +17,7 @@ describe('api client interceptors', () => {
     const { default: client } = await import('../../api/client')
 
     // Simulate a request config going through the request interceptor
-    const config = { headers: {} as Record<string, string> }
+    const config: InternalAxiosRequestConfig = { headers: new AxiosHeaders() }
     // @ts-expect-error accessing internal interceptors for testing
     const reqInterceptor = client.interceptors.request.handlers[0]
     if (reqInterceptor?.fulfilled) {
@@ -28,7 +28,7 @@ describe('api client interceptors', () => {
 
   it('does not add Authorization header when no token in localStorage', async () => {
     const { default: client } = await import('../../api/client')
-    const config = { headers: {} as Record<string, string> }
+    const config: InternalAxiosRequestConfig = { headers: new AxiosHeaders() }
     // @ts-expect-error
     const reqInterceptor = client.interceptors.request.handlers[0]
     if (reqInterceptor?.fulfilled) {

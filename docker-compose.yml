@@ -23,8 +23,23 @@ services:
       interval: 5s
       retries: 5
 
+  # One-shot: create tables + seed demo data, then exit.
+  # Mirrors the Kubernetes db-init Job so startup behaviour matches prod.
+  backend-init:
+    build: ./backend
+    image: safety-response-backend:dev
+    command: ["python", "-m", "app.init_db", "--seed"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:devpassword@db:5432/safety_response
+    depends_on:
+      db:
+        condition: service_healthy
+
   backend:
     build: ./backend
+    image: safety-response-backend:dev
+    # Dev override: hot-reload. The image's default CMD has no --reload (prod).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
     environment:
@@ -37,19 +52,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      backend-init:
+        condition: service_completed_successfully
     volumes:
       - ./backend/app:/app/app
 
+  # Production-style build: SPA compiled to static assets, served by nginx.
+  # nginx reverse-proxies /api to the backend (same-origin, so no CORS).
+  # For frontend hot-reload during development, run `pnpm dev` on the host.
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:8000
+      - "5173:8080"
     depends_on:
       - backend
-    volumes:
-      - ./frontend/src:/app/src  # dev hot-reload only; remove for production
 
 volumes:
   pgdata:

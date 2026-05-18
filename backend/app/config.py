@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 480
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
+    # Database connection pool — tuned per-pod so that
+    # replicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW) stays under Postgres max_connections.
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
+
     class Config:
         env_file = ".env"
 

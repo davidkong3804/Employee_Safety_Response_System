@@ -34,6 +34,7 @@ frontend/build/
 frontend/.next/
 frontend/coverage/
 frontend/htmlcov/
+*.tsbuildinfo
 
 # Backend test output
 backend/htmlcov/
