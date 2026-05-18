@@ -150,6 +150,24 @@ def employee_headers(employee_user) -> dict:
     return {"Authorization": f"Bearer {create_access_token(str(employee_user.id))}"}
 
 
+@pytest_asyncio.fixture()
+async def employee_other_fab(db_session, manager_user) -> User:
+    user = User(
+        employee_id="TEST_E002",
+        name="Other Fab Employee",
+        email="test.otherfab@example.com",
+        password_hash=hash_password("testpassword"),
+        role="employee",
+        department="Engineering",
+        facility="OtherFab",
+        manager_id=manager_user.id,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Event fixture
 # ---------------------------------------------------------------------------

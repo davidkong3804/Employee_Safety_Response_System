@@ -24,6 +24,7 @@ def _event_to_response(event: Event) -> EventResponse:
         event_type=event.event_type,
         severity=event.severity,
         status=event.status,
+        facility=event.facility,
         created_by=str(event.created_by),
         created_at=event.created_at,
         closed_at=event.closed_at,
