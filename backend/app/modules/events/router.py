@@ -65,11 +65,12 @@ async def create_event(
         description=data.description,
         event_type=data.event_type,
         severity=data.severity,
+        facility=data.facility or None,
         created_by=current_user.id,
     )
     db.add(event)
     await db.flush()
-    await db.refresh(event)
+    await db.refresh(event, attribute_names=['created_at'])
 
     # Create safety_report placeholders for active employees in the affected facility
     users_query = select(User).where(User.is_active == True)
