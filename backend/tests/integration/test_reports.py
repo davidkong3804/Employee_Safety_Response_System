@@ -35,22 +35,34 @@ class TestSubmitReport:
         )
         assert r.status_code == 400
 
-    async def test_no_placeholder_returns_404(self, client, admin_headers, active_event):
-        # Admin is in active_event fixture reports, but create a fresh event without a placeholder for admin
-        from sqlalchemy import delete
+    async def test_no_placeholder_returns_404(self, client, admin_headers, employee_headers, employee_user, db_session):
+        from uuid import UUID as PyUUID
+        from sqlalchemy import delete as sa_delete
         from app.modules.reports.models import SafetyReport
-        # This is testing via a new event that has no placeholder for this user
-        # - instead we can use the general logic: non-existent report returns 404
-        # Create an event that has no reports at all
+
         r_event = await client.post(
             "/api/events",
             json={"title": "No Placeholder Event", "event_type": "other", "severity": "low"},
             headers=admin_headers,
         )
-        # This event auto-generates reports for all users including employee
-        # So we can't easily test 404 without deleting the placeholder
-        # Just verify the happy path for completeness
         assert r_event.status_code == 201
+        event_uuid = PyUUID(r_event.json()["id"])
+
+        # Remove the employee's placeholder so no report record exists for them
+        await db_session.execute(
+            sa_delete(SafetyReport).where(
+                SafetyReport.event_id == event_uuid,
+                SafetyReport.user_id == employee_user.id,
+            )
+        )
+        await db_session.flush()
+
+        r = await client.post(
+            f"/api/events/{event_uuid}/report",
+            json={"status": "safe"},
+            headers=employee_headers,
+        )
+        assert r.status_code == 404
 
     async def test_resubmit_updates_existing_report(self, client, employee_headers, active_event):
         event_id = str(active_event.id)

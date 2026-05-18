@@ -33,6 +33,15 @@ class TestLogin:
         r = await client.post("/api/auth/login", json={"employee_id": "E001"})
         assert r.status_code == 422
 
+    async def test_inactive_user_cannot_login(self, client, employee_user, db_session):
+        employee_user.is_active = False
+        await db_session.flush()
+        r = await client.post(
+            "/api/auth/login",
+            json={"employee_id": "TEST_E001", "password": "testpassword"},
+        )
+        assert r.status_code == 401
+
 
 @pytest.mark.integration
 class TestGetMe:

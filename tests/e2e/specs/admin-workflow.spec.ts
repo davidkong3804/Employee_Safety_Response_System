@@ -67,12 +67,10 @@ test.describe('Admin Workflow – Event Lifecycle', () => {
       .first()
       .getByRole('button', { name: /delete|刪除/i })
       .first()
-    if (await deleteBtn.isVisible()) {
-      await deleteBtn.click()
-      await page.waitForLoadState('networkidle')
-      // Event should be gone
-      await expect(page.getByText(eventTitle)).not.toBeVisible({ timeout: 5_000 })
-    }
+    await expect(deleteBtn).toBeVisible({ timeout: 5_000 })
+    await deleteBtn.click()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(eventTitle)).not.toBeVisible({ timeout: 5_000 })
   })
 
   test('admin can create and manage users', async ({ adminPage: page }) => {

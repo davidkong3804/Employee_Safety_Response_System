@@ -34,8 +34,7 @@ class TestListEvents:
         statuses = [e["status"] for e in events]
         active_indices = [i for i, s in enumerate(statuses) if s == "active"]
         closed_indices = [i for i, s in enumerate(statuses) if s == "closed"]
-        if active_indices and closed_indices:
-            assert max(active_indices) < min(closed_indices)
+        assert max(active_indices) < min(closed_indices)
 
 
 @pytest.mark.integration

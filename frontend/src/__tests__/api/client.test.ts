@@ -62,4 +62,24 @@ describe('api client interceptors', () => {
     expect(localStorage.getItem('token')).toBeNull()
     locationSpy.mockRestore()
   })
+
+  it('does not clear token on 401 from the /auth/login endpoint', async () => {
+    localStorage.setItem('token', 'existing-token')
+    const { default: client } = await import('../../api/client')
+    const error = {
+      response: { status: 401 },
+      config: { url: '/api/auth/login' },
+      message: 'Unauthorized',
+    }
+    // @ts-expect-error
+    const resInterceptor = client.interceptors.response.handlers[0]
+    if (resInterceptor?.rejected) {
+      try {
+        await resInterceptor.rejected(error)
+      } catch {
+        // expected to reject
+      }
+    }
+    expect(localStorage.getItem('token')).toBe('existing-token')
+  })
 })
