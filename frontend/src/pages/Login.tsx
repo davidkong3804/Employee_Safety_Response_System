@@ -17,8 +17,10 @@ export default function Login() {
     e.preventDefault()
     setLoading(true)
     try {
-      await login(employeeId, password)
-      navigate('/')
+      const me = await login(employeeId, password)
+      if (me.role === 'admin') navigate('/admin/events')
+      else if (me.role === 'manager') navigate('/dashboard')
+      else navigate('/')
     } catch {
       toast.error(t('login.error'))
     } finally {

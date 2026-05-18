@@ -109,7 +109,7 @@ export default function Analytics() {
 
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <h2 className="text-lg font-semibold mb-4">Report Status by Event</h2>
+          <h2 className="text-lg font-semibold mb-4">{t('analytics.reportByEvent')}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={eventBarData}>
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -124,7 +124,7 @@ export default function Analytics() {
         </div>
 
         <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <h2 className="text-lg font-semibold mb-4">Overall Status Distribution</h2>
+          <h2 className="text-lg font-semibold mb-4">{t('analytics.overallDistribution')}</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie data={overallPie} cx="50%" cy="50%" innerRadius={60} outerRadius={110} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>

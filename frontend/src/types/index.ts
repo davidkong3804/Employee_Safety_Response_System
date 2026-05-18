@@ -16,6 +16,7 @@ export interface Event {
   event_type: string
   severity: string
   status: 'active' | 'closed'
+  facility: string[] | null
   created_by: string
   created_at: string
   closed_at: string | null

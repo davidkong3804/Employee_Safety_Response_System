@@ -62,7 +62,7 @@ export default function Dashboard() {
       const result = await triggerReminders(selectedEventId)
       toast.success(t('dashboard.reminded', { count: result.reminded_count }))
     } catch {
-      toast.error('Failed to send reminders')
+      toast.error(t('dashboard.remindFailed'))
     }
   }
 

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import any_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -31,10 +31,16 @@ def _event_to_response(event: Event) -> EventResponse:
 
 
 @router.get("", response_model=list[EventResponse])
-async def list_events(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Event).order_by(Event.status.asc(), Event.created_at.desc())
-    )
+async def list_events(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    query = select(Event).order_by(Event.status.asc(), Event.created_at.desc())
+    if current_user and current_user.role == "employee":
+        query = query.where(
+            (Event.facility.is_(None)) | (current_user.facility == any_(Event.facility))
+        )
+    result = await db.execute(query)
     return [_event_to_response(e) for e in result.scalars().all()]
 
 
@@ -64,8 +70,11 @@ async def create_event(
     await db.flush()
     await db.refresh(event)
 
-    # Create safety_report placeholders for all active employees
-    users_result = await db.execute(select(User).where(User.is_active == True))
+    # Create safety_report placeholders for active employees in the affected facility
+    users_query = select(User).where(User.is_active == True)
+    if event.facility:
+        users_query = users_query.where(User.facility.in_(event.facility))
+    users_result = await db.execute(users_query)
     for user in users_result.scalars().all():
         report = SafetyReport(event_id=event.id, user_id=user.id)
         db.add(report)

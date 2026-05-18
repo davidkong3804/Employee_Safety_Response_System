@@ -1,4 +1,7 @@
 {
+  "common": {
+    "actions": "Actions"
+  },
   "app": {
     "title": "Safety Response System",
     "subtitle": "Employee Safety Response System"
@@ -43,6 +46,13 @@
     "severity": "Severity",
     "close": "Close Event",
     "delete": "Delete Event",
+    "statusLabel": "Status",
+    "noEvents": "No active events",
+    "createdAt": "Created",
+    "createSuccess": "Event created",
+    "createFailed": "Failed to create event",
+    "closeSuccess": "Event closed",
+    "deleteSuccess": "Event deleted",
     "types": {
       "earthquake": "Earthquake",
       "fire": "Fire",
@@ -69,11 +79,13 @@
     "all": "All",
     "remind": "Send Reminders",
     "reminded": "Sent {{count}} reminders",
-    "refreshing": "Refreshing..."
+    "refreshing": "Refreshing...",
+    "remindFailed": "Failed to send reminders"
   },
   "peers": {
     "title": "Peer Status",
-    "call": "Call"
+    "call": "Call",
+    "noData": "No team data"
   },
   "user": {
     "create": "Create User",
@@ -84,13 +96,33 @@
     "facility": "Facility",
     "phone": "Phone",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "createSuccess": "User created",
+    "createFailed": "Failed to create user",
+    "deactivateSuccess": "User deactivated"
   },
   "analytics": {
     "title": "System Analytics",
     "totalEvents": "Total Events",
     "activeEvents": "Active Events",
     "avgReportRate": "Avg Report Rate",
-    "totalEmployees": "Total Employees"
+    "totalEmployees": "Total Employees",
+    "reportByEvent": "Report Status by Event",
+    "overallDistribution": "Overall Status Distribution"
+  },
+  "facility": {
+    "selectFacilities": "Select Affected Facilities",
+    "taiwan": "Taiwan",
+    "hsinchu": "Hsinchu",
+    "zhunan": "Miaoli / Zhunan",
+    "taichung": "Taichung",
+    "tainan": "Tainan",
+    "kaohsiung": "Kaohsiung",
+    "usa": "United States",
+    "arizona": "Arizona",
+    "japan": "Japan",
+    "kumamoto": "Kumamoto",
+    "germany": "Germany",
+    "dresden": "Saxony / Dresden"
   }
 }

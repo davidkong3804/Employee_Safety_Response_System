@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
 import { Plus, X, AlertTriangle } from 'lucide-react'
 import { listEvents, createEvent, updateEvent, deleteEvent } from '../../api/events'
+import FacilitySelector from '../../components/FacilitySelector'
 import type { Event } from '../../types'
 
 export default function EventManagement() {
@@ -10,7 +11,7 @@ export default function EventManagement() {
   const [events, setEvents] = useState<Event[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high' })
+  const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] as string[] })
 
   const load = () => {
     listEvents().then(setEvents).finally(() => setLoading(false))
@@ -21,25 +22,26 @@ export default function EventManagement() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await createEvent(form)
-      toast.success('Event created')
+      const { facilities, ...rest } = form
+      await createEvent({ ...rest, facility: facilities.length > 0 ? facilities : undefined })
+      toast.success(t('event.createSuccess'))
       setShowCreate(false)
-      setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high' })
+      setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] })
       load()
     } catch {
-      toast.error('Failed to create event')
+      toast.error(t('event.createFailed'))
     }
   }
 
   const handleClose = async (id: string) => {
     await updateEvent(id, { status: 'closed' })
-    toast.success('Event closed')
+    toast.success(t('event.closeSuccess'))
     load()
   }
 
   const handleDelete = async (id: string) => {
     await deleteEvent(id)
-    toast.success('Event deleted')
+    toast.success(t('event.deleteSuccess'))
     load()
   }
 
@@ -106,6 +108,13 @@ export default function EventManagement() {
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('facility.selectFacilities')}</label>
+                <FacilitySelector
+                  value={form.facilities}
+                  onChange={facilities => setForm({ ...form, facilities })}
+                />
+              </div>
               <button type="submit" className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition">
                 {t('event.create')}
               </button>
@@ -119,12 +128,13 @@ export default function EventManagement() {
         <table className="w-full">
           <thead className="bg-gray-50 text-left text-sm text-gray-500">
             <tr>
-              <th className="px-4 py-3">{t('event.title')}</th>
-              <th className="px-4 py-3">{t('event.type')}</th>
-              <th className="px-4 py-3">{t('event.severity')}</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3">Actions</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.title')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.type')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.severity')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.facility')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.statusLabel')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('event.createdAt')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -138,6 +148,7 @@ export default function EventManagement() {
                 </td>
                 <td className="px-4 py-3 text-sm">{t(`event.types.${ev.event_type}`)}</td>
                 <td className="px-4 py-3">{severityBadge(ev.severity)}</td>
+                <td className="px-4 py-3 text-sm">{ev.facility && ev.facility.length > 0 ? ev.facility.join(', ') : t('event.allFacilities')}</td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                     ev.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'

@@ -162,6 +162,7 @@ async def active_event(db_session, admin_user, manager_user, employee_user) -> E
         event_type="earthquake",
         severity="high",
         status="active",
+        facility=["TestFab"],
         created_by=admin_user.id,
     )
     db_session.add(event)

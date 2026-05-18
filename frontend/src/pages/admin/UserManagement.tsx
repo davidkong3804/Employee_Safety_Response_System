@@ -26,17 +26,17 @@ export default function UserManagement() {
     e.preventDefault()
     try {
       await createUser(form)
-      toast.success('User created')
+      toast.success(t('user.createSuccess'))
       setShowCreate(false)
       load()
     } catch {
-      toast.error('Failed to create user')
+      toast.error(t('user.createFailed'))
     }
   }
 
   const handleDeactivate = async (id: string) => {
     await deleteUser(id)
-    toast.success('User deactivated')
+    toast.success(t('user.deactivateSuccess'))
     load()
   }
 
@@ -104,8 +104,8 @@ export default function UserManagement() {
               <th className="px-4 py-3">{t('user.role')}</th>
               <th className="px-4 py-3">{t('user.department')}</th>
               <th className="px-4 py-3">{t('user.facility')}</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Actions</th>
+              <th className="px-4 py-3">{t('report.status')}</th>
+              <th className="px-4 py-3">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">

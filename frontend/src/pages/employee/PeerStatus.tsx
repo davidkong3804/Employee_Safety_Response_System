@@ -68,7 +68,7 @@ export default function PeerStatus() {
         ))}
 
         {reports.length === 0 && (
-          <p className="text-center text-gray-400 py-12">No team data</p>
+          <p className="text-center text-gray-400 py-12">{t('peers.noData')}</p>
         )}
       </div>
     </div>
