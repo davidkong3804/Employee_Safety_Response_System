@@ -1,0 +1,23 @@
+# Non-secret backend configuration.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: safety-system
+data:
+  REDIS_URL: "redis://redis:6379"
+  JWT_EXPIRE_MINUTES: "480"
+
+  # CORS: the Ingress serves the SPA and /api from the same host, so requests
+  # are same-origin and CORS is not exercised in normal use. Set this to your
+  # real domain if you ever call the API cross-origin.
+  CORS_ORIGINS: "http://localhost,https://safety.example.com"
+
+  # Connection pool per backend pod. Keep
+  #   maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)
+  # below Postgres max_connections (set to 200 in 03-postgres.yaml).
+  # 30 x (3 + 2) = 150 < 200. For larger scale, put pgbouncer in front.
+  DB_POOL_SIZE: "3"
+  DB_MAX_OVERFLOW: "2"
+  DB_POOL_TIMEOUT: "30"
+  DB_POOL_RECYCLE: "1800"

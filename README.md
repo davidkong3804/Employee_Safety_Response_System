@@ -28,6 +28,7 @@ A cloud-native emergency safety reporting system that enables enterprises to qui
 | Auth | JWT (python-jose + bcrypt) |
 | i18n | react-i18next (EN / zh-TW) |
 | Containers | Docker + Docker Compose |
+| Orchestration | Kubernetes (GKE) — autoscaling, health probes, Ingress |
 
 ## Architecture
 
@@ -105,18 +106,32 @@ docker compose down        # Stop services
 docker compose down -v     # Stop and remove data volumes
 ```
 
+### Deploy to Kubernetes (GKE)
+
+```bash
+kubectl apply -f k8s/
+kubectl -n safety-system wait --for=condition=complete job/db-init --timeout=180s
+```
+
+Manifests in `k8s/` deploy the stack with horizontal autoscaling (backend
+3–30 pods), health probes, and a GKE Ingress. See
+[docs/deployment.md](docs/deployment.md) for the full procedure including
+image build/push.
+
 ## Project Structure
 
 ```
-├── docker-compose.yml              # Container orchestration
+├── docker-compose.yml              # Local container orchestration
+├── k8s/                            # Kubernetes manifests (GKE)
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py                 # FastAPI app + lifespan
+│       ├── main.py                 # FastAPI app + lifespan + health probes
 │       ├── config.py               # Environment settings
-│       ├── database.py             # Async SQLAlchemy engine
+│       ├── database.py             # Async SQLAlchemy engine + connection pool
 │       ├── dependencies.py         # Auth guards (get_current_user, require_role)
+│       ├── init_db.py              # Run-once: create tables (+ seed)
 │       ├── seed.py                 # Demo data seeder
 │       └── modules/
 │           ├── auth/               # Login, JWT, profile
@@ -137,7 +152,8 @@ docker compose down -v     # Stop and remove data volumes
 │       ├── contexts/               # AuthContext (JWT state)
 │       └── i18n/                   # en.json, zh-TW.json
 ├── docs/
-│   ├── architecture.md             # System architecture + target K8s design
+│   ├── architecture.md             # System architecture + K8s deployment
+│   ├── deployment.md               # Docker Compose + GKE deployment guide
 │   ├── er-diagram.md               # Database ER diagram (Mermaid)
 │   ├── sequence-diagrams.md        # 6 sequence diagrams
 │   ├── api-spec.md                 # Full API specification
@@ -177,7 +193,8 @@ See [docs/er-diagram.md](docs/er-diagram.md) for full ER diagram.
 
 | Document | Content |
 |----------|---------|
-| [Architecture](docs/architecture.md) | System architecture, tech decisions, K8s target design |
+| [Architecture](docs/architecture.md) | System architecture, tech decisions, K8s deployment |
+| [Deployment](docs/deployment.md) | Docker Compose + GKE deployment, scaling, health probes |
 | [ER Diagram](docs/er-diagram.md) | Database schema with Mermaid diagram |
 | [Sequence Diagrams](docs/sequence-diagrams.md) | 6 key workflow diagrams |
 | [API Specification](docs/api-spec.md) | Complete REST API reference |

@@ -35,7 +35,51 @@ Employee Safety & Response System (企業營運緊急事件安全回報系統) a
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Target Production Architecture (Kubernetes)
+## Kubernetes Deployment (Implemented)
+
+The system runs on Kubernetes today as a **horizontally scaled modular
+monolith** — the whole backend is deployed as one image, run as many identical
+replicas behind a load balancer. Manifests live in `k8s/`; see
+[deployment.md](deployment.md) for the full procedure.
+
+```
+                    GKE Ingress (HTTP/S Load Balancer)
+                       /                        \
+                  /api  →                    /*  →
+                       │                          │
+              ┌────────▼────────┐        ┌────────▼────────┐
+              │  backend Svc     │        │  frontend Svc    │
+              │  Deployment+HPA  │        │  Deployment+HPA  │
+              │  3–30 pods       │        │  2–10 pods       │
+              │  FastAPI :8000   │        │  nginx :8080     │
+              └────────┬────────┘        └─────────────────┘
+                       │
+          ┌────────────┴────────────┐
+   ┌──────▼──────┐           ┌──────▼──────┐
+   │ PostgreSQL  │           │   Redis     │
+   │ StatefulSet │           │ Deployment  │
+   └──────▲──────┘           └─────────────┘
+          │
+   ┌──────┴───────┐
+   │ db-init Job  │  runs once: create tables + seed demo data
+   └──────────────┘
+```
+
+Key cloud-native properties:
+
+- **Stateless backend** — JWT auth, no server-side sessions → any replica can
+  serve any request.
+- **Run-once initialization** — schema creation and seeding happen in the
+  `db-init` Job, never on pod startup, so replicas never race.
+- **Health probes** — liveness (`/health`) is dependency-free; readiness
+  (`/health/ready`) checks the database so traffic is held off pods that
+  cannot serve.
+- **Autoscaling** — HPA scales backend pods on CPU; the connection pool is
+  sized per pod so `replicas x pool` stays under Postgres `max_connections`.
+- **Zero-downtime rollouts** — RollingUpdate with `maxUnavailable: 0` plus a
+  PodDisruptionBudget.
+
+## Future Direction: Microservices Split
 
 ```
                          ┌─────────────┐
@@ -112,13 +156,24 @@ FastAPI with async SQLAlchemy handles concurrent requests efficiently, critical 
 ### 3. JWT Stateless Auth
 Stateless tokens eliminate the need for session storage, making horizontal scaling straightforward.
 
-### 4. Server-Sent Events (SSE) for Real-time
-SSE is simpler than WebSocket for one-way server-to-client updates, perfect for dashboard auto-refresh.
+### 4. Polling for Dashboard Refresh
+The manager dashboard refreshes by polling the stats endpoints every 30
+seconds. Polling keeps every request stateless — no sticky sessions, no
+long-lived connections pinned to a pod — which is what makes the backend
+trivially horizontally scalable. WebSocket/SSE push is a possible future
+optimization but would add per-pod connection state.
+
+### 5. Run-Once Database Initialization
+Table creation and demo seeding run via `app.init_db` (Compose init service /
+Kubernetes Job), never on application startup. Per-pod startup initialization
+races across replicas; a single run-once job does not.
 
 ## Scalability Considerations
 
 ### Horizontal Scaling
-- Backend is stateless → can scale to N replicas behind a load balancer
+- Backend is stateless → scales to N replicas behind a load balancer (HPA: 3–30)
+- Connection pool sized per pod so `replicas x (pool_size + max_overflow)`
+  stays under Postgres `max_connections`; pgbouncer for larger scale
 - PostgreSQL supports read replicas for dashboard queries
 - Redis can be clustered for cache distribution
 

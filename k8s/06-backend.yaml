@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: safety-system
+  annotations:
+    # Container-native load balancing (NEG) so the GKE Ingress routes
+    # straight to pods instead of bouncing through kube-proxy.
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: safety-system
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: backend
+          # Replace with your registry path, e.g.
+          # asia-east1-docker.pkg.dev/PROJECT/REPO/safety-response-backend:TAG
+          image: safety-response-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          # Liveness: process is up. Cheap, no DB dependency — a DB blip
+          # must not trigger a pod restart.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          # Readiness: only receive traffic when the DB is reachable.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: safety-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: backend

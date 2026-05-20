@@ -1,0 +1,38 @@
+# Runs once: creates tables and seeds demo data. This replaces the old
+# create-tables-and-seed-on-every-pod-startup behaviour, which raced across
+# replicas. The job is idempotent (create_all is checkfirst; seeding skips
+# when users already exist), so retries are safe.
+#
+# A Job spec is immutable — to re-run after a code change:
+#   kubectl -n safety-system delete job db-init && kubectl apply -f k8s/05-db-init-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  namespace: safety-system
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          # Replace with your registry path, e.g.
+          # asia-east1-docker.pkg.dev/PROJECT/REPO/safety-response-backend:TAG
+          image: safety-response-backend:latest
+          command: ["python", "-m", "app.init_db", "--seed"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

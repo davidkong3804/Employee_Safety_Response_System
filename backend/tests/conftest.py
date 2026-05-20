@@ -21,7 +21,7 @@ from app.modules.notifications.models import Reminder
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
 
-# Replace lifespan with no-op so seed_data never runs during tests
+# Replace lifespan with a no-op so tests fully control schema setup/teardown
 @asynccontextmanager
 async def _noop_lifespan(application):
     yield
