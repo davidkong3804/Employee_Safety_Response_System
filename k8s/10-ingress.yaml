@@ -2,6 +2,15 @@
 # Path routing: /api -> backend Service, everything else -> frontend Service.
 # Health checks for each backend are derived automatically from the pods'
 # readiness probes (/health/ready for backend, /healthz for frontend).
+#
+# HTTPS: Google-managed certificate (free, auto-renew) is provisioned for
+# the DuckDNS domain below. The LB validates via HTTP-01 — so HTTP must
+# stay enabled for at least the first provisioning. Once the cert is
+# ACTIVE, you may flip allow-http to "false" to force HTTPS.
+#
+# Prerequisites (one-time, already done):
+#   gcloud compute addresses create safety-ip --global --addresses=8.233.75.252
+#   DuckDNS A record  employee-safety.duckdns.org -> 8.233.75.252
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,11 +18,8 @@ metadata:
   namespace: safety-system
   annotations:
     kubernetes.io/ingress.class: "gce"
-    # --- Optional production hardening (uncomment + create the resources) ---
-    # Reserve a global static IP first:  gcloud compute addresses create safety-ip --global
-    # kubernetes.io/ingress.global-static-ip-name: "safety-ip"
-    # networking.gke.io/managed-certificates: "safety-cert"
-    # kubernetes.io/ingress.allow-http: "false"
+    kubernetes.io/ingress.global-static-ip-name: "safety-ip"
+    networking.gke.io/managed-certificates: "safety-cert"
 spec:
   rules:
     - http:
@@ -33,14 +39,14 @@ spec:
                 port:
                   number: 8080
 ---
-# Optional: Google-managed TLS certificate. Uncomment, set your domain, and
-# reference it from the Ingress annotation above. DNS for the domain must
-# point at the Ingress static IP before the certificate can provision.
-# apiVersion: networking.gke.io/v1
-# kind: ManagedCertificate
-# metadata:
-#   name: safety-cert
-#   namespace: safety-system
-# spec:
-#   domains:
-#     - safety.example.com
+# Google-managed TLS certificate. Auto-renews. DNS for the listed domains
+# must already resolve to the Ingress static IP (safety-ip) before this
+# provisions — the cert controller validates via HTTP-01 challenge.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: safety-cert
+  namespace: safety-system
+spec:
+  domains:
+    - employee-safety.duckdns.org
