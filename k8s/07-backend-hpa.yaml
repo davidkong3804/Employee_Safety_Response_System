@@ -8,7 +8,12 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: backend
-  minReplicas: 3
+  minReplicas: 1
+  # Stress-test ceiling. Real headroom depends on the project's
+  # CPUS_ALL_REGIONS quota and the cluster-autoscaler max nodes; with
+  # the current 2-4 e2-medium pool (~3.4 GB usable mem/node) we can fit
+  # ~40 backend pods @ 192Mi req each. Bump to 50 after quota increase
+  # raises the cross-region CPU cap.
   maxReplicas: 30
   metrics:
     - type: Resource

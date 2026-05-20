@@ -18,11 +18,13 @@ spec:
         app: db-init
     spec:
       restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
       containers:
         - name: db-init
-          # Replace with your registry path, e.g.
-          # asia-east1-docker.pkg.dev/PROJECT/REPO/safety-response-backend:TAG
-          image: safety-response-backend:latest
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:v1
           command: ["python", "-m", "app.init_db", "--seed"]
           envFrom:
             - configMapRef:
