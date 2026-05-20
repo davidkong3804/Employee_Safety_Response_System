@@ -34,7 +34,9 @@ spec:
         - name: postgres
           image: postgres:16-alpine
           # Raise max_connections to comfortably cover all backend pods.
-          args: ["-c", "max_connections=200"]
+          # 60 pods x (3 + 2 pool) = 300; bump to 350 to leave headroom for
+          # psql admin connections, k8s probes, and the db-init Job.
+          args: ["-c", "max_connections=350"]
           env:
             - name: POSTGRES_DB
               value: safety_response
@@ -74,6 +76,9 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        # pd-standard (HDD) — keeps us under the much smaller SSD_TOTAL_GB
+        # regional quota that the GKE Standard default would otherwise hit.
+        storageClassName: standard
         resources:
           requests:
             storage: 5Gi

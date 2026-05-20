@@ -15,8 +15,8 @@ data:
 
   # Connection pool per backend pod. Keep
   #   maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)
-  # below Postgres max_connections (set to 200 in 03-postgres.yaml).
-  # 30 x (3 + 2) = 150 < 200. For larger scale, put pgbouncer in front.
+  # below Postgres max_connections (set to 350 in 03-postgres.yaml).
+  # 60 x (3 + 2) = 300 < 350. For larger scale, put pgbouncer in front.
   DB_POOL_SIZE: "3"
   DB_MAX_OVERFLOW: "2"
   DB_POOL_TIMEOUT: "30"

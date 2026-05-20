@@ -19,7 +19,7 @@ metadata:
   name: frontend
   namespace: safety-system
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: frontend
@@ -37,9 +37,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: frontend
-          # Replace with your registry path, e.g.
-          # asia-east1-docker.pkg.dev/PROJECT/REPO/safety-response-frontend:TAG
-          image: safety-response-frontend:latest
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/frontend:v1
           ports:
             - containerPort: 8080
           livenessProbe:

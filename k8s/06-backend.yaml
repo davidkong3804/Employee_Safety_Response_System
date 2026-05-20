@@ -21,7 +21,7 @@ metadata:
   name: backend
   namespace: safety-system
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: backend
@@ -37,11 +37,11 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
       containers:
         - name: backend
-          # Replace with your registry path, e.g.
-          # asia-east1-docker.pkg.dev/PROJECT/REPO/safety-response-backend:TAG
-          image: safety-response-backend:latest
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:v1
           ports:
             - containerPort: 8000
           envFrom:
@@ -69,10 +69,13 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              # Sized for stress-test density: 30+ pods on a 2-4 e2-medium
+              # pool. FastAPI + asyncpg pool baseline is ~120-140 MB; 192Mi
+              # gives ~50 MB headroom before the 384Mi limit kicks in.
+              memory: 192Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 384Mi
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -80,7 +83,7 @@ metadata:
   name: backend
   namespace: safety-system
 spec:
-  minAvailable: 2
+  minAvailable: 1
   selector:
     matchLabels:
       app: backend
