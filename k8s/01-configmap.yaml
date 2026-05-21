@@ -11,7 +11,7 @@ data:
   # CORS: the Ingress serves the SPA and /api from the same host, so requests
   # are same-origin and CORS is not exercised in normal use. Set this to your
   # real domain if you ever call the API cross-origin.
-  CORS_ORIGINS: "http://localhost,https://safety.example.com"
+  CORS_ORIGINS: "http://localhost,https://employee-safety.duckdns.org"
 
   # Connection pool per backend pod. Keep
   #   maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)

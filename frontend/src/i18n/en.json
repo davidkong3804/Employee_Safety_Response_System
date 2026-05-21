@@ -1,6 +1,7 @@
 {
   "common": {
-    "actions": "Actions"
+    "actions": "Actions",
+    "status": "Status"
   },
   "app": {
     "title": "Safety Response System",
@@ -53,6 +54,8 @@
     "createFailed": "Failed to create event",
     "closeSuccess": "Event closed",
     "deleteSuccess": "Event deleted",
+    "facility": "Affected Facilities",
+    "allFacilities": "All Facilities",
     "types": {
       "earthquake": "Earthquake",
       "fire": "Fire",

@@ -200,7 +200,7 @@ export default function Dashboard() {
                 <th className="px-4 py-3">{t('user.name')}</th>
                 <th className="px-4 py-3">{t('user.department')}</th>
                 <th className="px-4 py-3">{t('user.facility')}</th>
-                <th className="px-4 py-3">{t('report.status')}</th>
+                <th className="px-4 py-3">{t('common.status')}</th>
                 <th className="px-4 py-3">{t('user.phone')}</th>
               </tr>
             </thead>
