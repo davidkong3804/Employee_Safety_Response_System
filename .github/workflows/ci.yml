@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feature/testing]
+    branches: [main, "feature/**", "fix/**"]
   pull_request:
     branches: [main]
 
@@ -171,3 +171,101 @@ jobs:
       - name: Tear down stack
         if: always()
         run: docker compose down
+
+  # ----------------------------------------------------------------
+  # Job 5: Build and push Docker images to Artifact Registry.
+  # Runs ONLY on push to main after ALL four test jobs pass.
+  #
+  # Required GitHub Secret (Settings → Secrets and variables → Actions):
+  #   GCP_SA_KEY  — Service Account JSON key with roles:
+  #                   roles/artifactregistry.writer
+  #                   roles/container.developer
+  # ----------------------------------------------------------------
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    needs: [backend-unit, backend-integration, frontend-unit, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      REGISTRY: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          # GitHub Actions cache keeps layers warm across runs.
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+          tags: |
+            ${{ env.REGISTRY }}/backend:${{ github.sha }}
+            ${{ env.REGISTRY }}/backend:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+          tags: |
+            ${{ env.REGISTRY }}/frontend:${{ github.sha }}
+            ${{ env.REGISTRY }}/frontend:latest
+
+  # ----------------------------------------------------------------
+  # Job 6: Rolling deploy to GKE (depends on build-and-push).
+  # Runs ONLY on push to main.
+  #
+  # Additional required GitHub Secrets:
+  #   GKE_CLUSTER  — GKE cluster name (e.g. safety-cluster)
+  #   GKE_REGION   — cluster region   (e.g. asia-east1)
+  # ----------------------------------------------------------------
+  deploy:
+    name: Deploy to GKE
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      REGISTRY: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ secrets.GKE_REGION }}
+
+      - name: Roll out backend
+        run: |
+          kubectl -n safety-system set image deployment/backend \
+            backend=${{ env.REGISTRY }}/backend:${{ github.sha }}
+          kubectl -n safety-system rollout status deployment/backend \
+            --timeout=180s
+
+      - name: Roll out frontend
+        run: |
+          kubectl -n safety-system set image deployment/frontend \
+            frontend=${{ env.REGISTRY }}/frontend:${{ github.sha }}
+          kubectl -n safety-system rollout status deployment/frontend \
+            --timeout=180s

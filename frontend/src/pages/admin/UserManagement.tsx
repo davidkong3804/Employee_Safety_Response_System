@@ -104,7 +104,7 @@ export default function UserManagement() {
               <th className="px-4 py-3">{t('user.role')}</th>
               <th className="px-4 py-3">{t('user.department')}</th>
               <th className="px-4 py-3">{t('user.facility')}</th>
-              <th className="px-4 py-3">{t('report.status')}</th>
+              <th className="px-4 py-3">{t('common.status')}</th>
               <th className="px-4 py-3">{t('common.actions')}</th>
             </tr>
           </thead>

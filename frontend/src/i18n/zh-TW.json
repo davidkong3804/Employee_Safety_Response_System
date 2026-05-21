@@ -1,6 +1,7 @@
 {
   "common": {
-    "actions": "操作"
+    "actions": "操作",
+    "status": "狀態"
   },
   "app": {
     "title": "企業安全回報系統",
@@ -53,6 +54,8 @@
     "createFailed": "事件建立失敗",
     "closeSuccess": "事件已結束",
     "deleteSuccess": "事件已刪除",
+    "facility": "受影響廠區",
+    "allFacilities": "全廠區",
     "types": {
       "earthquake": "地震",
       "fire": "火災",
