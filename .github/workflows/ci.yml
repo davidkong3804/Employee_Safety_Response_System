@@ -232,8 +232,8 @@ jobs:
   # Runs ONLY on push to main.
   #
   # Additional required GitHub Secrets:
-  #   GKE_CLUSTER  — GKE cluster name (e.g. safety-cluster)
-  #   GKE_REGION   — cluster region   (e.g. asia-east1)
+  #   GKE_CLUSTER  — GKE cluster name: safety-response
+  #   GKE_REGION   — cluster zone:     asia-east1-a
   # ----------------------------------------------------------------
   deploy:
     name: Deploy to GKE

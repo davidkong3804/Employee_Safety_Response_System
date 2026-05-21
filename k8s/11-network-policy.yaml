@@ -1,0 +1,149 @@
+# Pod-level network isolation for the safety-system namespace.
+#
+# Strategy: default-deny all ingress and egress, then allow only the
+# minimum required paths. Key security wins:
+#   - postgres/redis are unreachable directly from the frontend
+#   - a compromised frontend cannot talk to the database
+#   - backend egress is locked to postgres, redis, and DNS only
+#
+# GKE note: container-native load balancing (NEG) sends traffic
+# from Google's health-check probers (35.191.0.0/16, 209.85.128.0/17)
+# directly to pod IPs. The open-port ingress rules on frontend and
+# backend cover this — the real perimeter security is the GKE VPC
+# firewall, which restricts public traffic to the Ingress LB only.
+
+# 1. Default-deny everything in the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: safety-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# 2. Frontend: accept HTTP on 8080 (LB health checks + proxied traffic).
+#    Egress: backend API proxy + DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 8000
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# 3. Backend: accept on 8000 (frontend nginx proxy + LB health checks).
+#    Egress: postgres, redis, DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 8000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# 4. Postgres: accept only from backend pods and the db-init Job.
+#    No egress needed (postgres does not initiate outbound connections).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+        - podSelector:
+            matchLabels:
+              app: db-init
+      ports:
+        - port: 5432
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# 5. Redis: accept only from backend pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 6379
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

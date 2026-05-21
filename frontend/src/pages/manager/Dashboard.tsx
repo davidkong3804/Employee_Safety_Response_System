@@ -110,7 +110,7 @@ export default function Dashboard() {
               <option key={ev.id} value={ev.id}>{ev.title}</option>
             ))}
           </select>
-          <button onClick={loadData} className="p-2 hover:bg-gray-100 rounded-lg" title="Refresh">
+          <button onClick={loadData} className="p-2 hover:bg-gray-100 rounded-lg" title={t('dashboard.refresh')}>
             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
           <button onClick={handleRemind} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">
@@ -196,12 +196,12 @@ export default function Dashboard() {
           <table className="w-full">
             <thead className="bg-gray-50 text-left text-sm text-gray-500">
               <tr>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">{t('user.name')}</th>
-                <th className="px-4 py-3">{t('user.department')}</th>
-                <th className="px-4 py-3">{t('user.facility')}</th>
-                <th className="px-4 py-3">{t('common.status')}</th>
-                <th className="px-4 py-3">{t('user.phone')}</th>
+                <th className="px-4 py-3 whitespace-nowrap">ID</th>
+                <th className="px-4 py-3 whitespace-nowrap">{t('user.name')}</th>
+                <th className="px-4 py-3 whitespace-nowrap">{t('user.department')}</th>
+                <th className="px-4 py-3 whitespace-nowrap">{t('user.facility')}</th>
+                <th className="px-4 py-3 whitespace-nowrap">{t('common.status')}</th>
+                <th className="px-4 py-3 whitespace-nowrap">{t('user.phone')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
