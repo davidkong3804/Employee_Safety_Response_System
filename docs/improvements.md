@@ -56,7 +56,7 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 
 | # | 位置 | 優先 | 問題 | 建議 |
 |---|------|------|------|------|
-| D1 | `k8s/02-secret.yaml` | 🔴 | dev placeholder secret（JWT_SECRET、DB 密碼）已進 git | 正式環境改用 GCP Secret Manager + Secrets Store CSI driver；`JWT_SECRET` 用 `openssl rand -hex 32` 重新產生 |
+| D1 | `k8s/02-secret.yaml` | 🟡 | ✅ **已修**：`02-secret.yaml` 移出版控（改 `02-secret.yaml.example` 範本 + 加入 `.gitignore`），真實 secret 不再進 git。**仍待辦**：① 把線上叢集的 `JWT_SECRET` 用 `openssl rand -hex 32` 換成真值；② 正式環境評估改用 GCP Secret Manager + Secrets Store CSI driver | 詳見 H 區與 `docs/deployment.md` 步驟 2 |
 | D2 | `k8s/10-ingress.yaml` | 🟡 | 尚未加 `kubernetes.io/ingress.allow-http: "false"` | Google-managed cert 變 ACTIVE 後手動補上，強制 HTTPS |
 | D3 | `k8s/03-postgres.yaml` | 🟡 | 單實例 Postgres，無 HA、無自動備份 | 正式環境改用 Cloud SQL for PostgreSQL |
 | D4 | `k8s/04-redis.yaml` | 🟢 | Redis 已部署但程式碼沒用到 | 接上 C3 的 dashboard 快取後才有意義 |
@@ -115,14 +115,15 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 - `k8s/11-network-policy.yaml`（default-deny + allow-list，DB/Redis 不可被 frontend 直連）
 - 測試：後端 unit/integration、前端 Vitest、E2E Playwright、Locust 皆完整
 - 遠端分支清理（feature/testing、docs/handoff 已合併或刪除）
+- **D1（部分）**：`k8s/02-secret.yaml` 移出版控 — 改 `02-secret.yaml.example` 範本 + `.gitignore`，`docs/deployment.md`、`CLAUDE.md` 同步更新部署步驟
 
 ---
 
 ## 建議處理順序
 
-1. **🔴 E1** — 設定 CI secrets，讓 pipeline 能跑（5 分鐘）
-2. **🔴 D1** — 正式上線前換掉 dev secrets
-3. **🟡 A1–A4** — 修文件不一致（低成本、避免誤導）
+1. **🔴 E1** — 設定 CI secrets，讓 pipeline 能跑（GitHub UI 操作，僅你能做）
+2. ~~🔴 D1~~ — ✅ secrets 已移出版控；正式上線前仍須換真值並評估 Secret Manager
+3. **🟡 A1–A6** — 修文件不一致（低成本、避免誤導）
 4. **🟡 B1–B4** — 前端錯誤處理與二次確認（體驗品質）
 5. **🟡 E2** — 導入 Kustomize 解決 image tag drift
 6. **🟡 C3** — Redis 接上 dashboard 快取（壓測前做，效益明顯）

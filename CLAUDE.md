@@ -26,10 +26,11 @@ Idempotent and safe to re-run. Runs as the Compose `backend-init` service and th
 
 ### Kubernetes (GKE)
 ```bash
+cp k8s/02-secret.yaml.example k8s/02-secret.yaml               # fill real values; gitignored
 kubectl apply -f k8s/                                          # numbered, applies in order
 kubectl -n safety-system wait --for=condition=complete job/db-init --timeout=180s
 ```
-Manifests live in `k8s/` (namespace `safety-system`). See `docs/deployment.md` for image build/push and the full procedure.
+Manifests live in `k8s/` (namespace `safety-system`). `k8s/02-secret.yaml` is gitignored — create it from the `.example` template before the first apply. See `docs/deployment.md` for image build/push and the full procedure.
 
 ### Backend (FastAPI, Python 3.12) — run from `backend/`
 ```bash

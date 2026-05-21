@@ -87,10 +87,21 @@ docker push $REPO/safety-response-frontend:v1
 
 ### 2. Set real secrets
 
-Edit `k8s/02-secret.yaml` before applying. The committed values are dev
-placeholders. Generate a real JWT secret with `openssl rand -hex 32`. For
-production, prefer GCP Secret Manager (Secrets Store CSI driver) over a
-plain Secret, and prefer Cloud SQL over the in-cluster `03-postgres.yaml`.
+`k8s/02-secret.yaml` is **gitignored** — secrets never enter version
+control. Create it from the committed template before applying:
+
+```bash
+cp k8s/02-secret.yaml.example k8s/02-secret.yaml
+openssl rand -hex 32          # generate a strong JWT_SECRET
+# then edit k8s/02-secret.yaml — set JWT_SECRET, POSTGRES_PASSWORD,
+# and the password embedded in DATABASE_URL (must match POSTGRES_PASSWORD)
+```
+
+The `.example` file has a non-`.yaml` extension on purpose, so
+`kubectl apply -f k8s/` skips the template and applies only the real
+secret. For production, prefer GCP Secret Manager (Secrets Store CSI
+driver) over a plain Secret, and prefer Cloud SQL over the in-cluster
+`03-postgres.yaml`.
 
 ### 3. Apply
 

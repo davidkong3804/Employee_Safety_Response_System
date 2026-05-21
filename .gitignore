@@ -49,3 +49,7 @@ tests/e2e/test-results/
 
 # Performance test reports
 tests/performance/reports/
+
+# Kubernetes secrets — never commit real values.
+# Create k8s/02-secret.yaml from k8s/02-secret.yaml.example before deploying.
+k8s/02-secret.yaml
