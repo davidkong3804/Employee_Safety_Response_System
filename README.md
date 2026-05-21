@@ -1,8 +1,12 @@
 # Employee Safety & Response System
 
+[![CI](https://github.com/davidkong3804/Employee_Safety_Response_System/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/davidkong3804/Employee_Safety_Response_System/actions/workflows/ci.yml)
+
 **企業營運緊急事件安全回報系統**
 
 A cloud-native emergency safety reporting system that enables enterprises to quickly assess employee safety status during critical incidents (earthquakes, fires, security breaches, etc.).
+
+**Live demo**: <https://employee-safety.duckdns.org> — accounts `A001` / `M001` / `E001`, password `password123`.
 
 ## Features
 
