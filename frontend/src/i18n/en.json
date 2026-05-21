@@ -82,6 +82,7 @@
     "all": "All",
     "remind": "Send Reminders",
     "reminded": "Sent {{count}} reminders",
+    "refresh": "Refresh",
     "refreshing": "Refreshing...",
     "remindFailed": "Failed to send reminders"
   },
@@ -102,7 +103,12 @@
     "inactive": "Inactive",
     "createSuccess": "User created",
     "createFailed": "Failed to create user",
-    "deactivateSuccess": "User deactivated"
+    "deactivateSuccess": "User deactivated",
+    "roles": {
+      "admin": "Admin",
+      "manager": "Manager",
+      "employee": "Employee"
+    }
   },
   "analytics": {
     "title": "System Analytics",

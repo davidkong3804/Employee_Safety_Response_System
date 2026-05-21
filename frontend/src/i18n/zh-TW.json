@@ -82,6 +82,7 @@
     "all": "全部",
     "remind": "發送提醒",
     "reminded": "已發送 {{count}} 則提醒",
+    "refresh": "重新整理",
     "refreshing": "資料更新中...",
     "remindFailed": "發送提醒失敗"
   },
@@ -102,7 +103,12 @@
     "inactive": "停用",
     "createSuccess": "使用者已新增",
     "createFailed": "新增使用者失敗",
-    "deactivateSuccess": "使用者已停用"
+    "deactivateSuccess": "使用者已停用",
+    "roles": {
+      "admin": "管理員",
+      "manager": "主管",
+      "employee": "員工"
+    }
   },
   "analytics": {
     "title": "系統分析",

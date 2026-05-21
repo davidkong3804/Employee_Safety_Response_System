@@ -55,9 +55,9 @@ export default function UserManagement() {
         <div className="flex items-center gap-3">
           <select value={filterRole} onChange={e => setFilterRole(e.target.value)} className="px-3 py-2 border rounded-lg text-sm">
             <option value="">{t('user.role')}: {t('dashboard.all')}</option>
-            <option value="admin">Admin</option>
-            <option value="manager">Manager</option>
-            <option value="employee">Employee</option>
+            <option value="admin">{t('user.roles.admin')}</option>
+            <option value="manager">{t('user.roles.manager')}</option>
+            <option value="employee">{t('user.roles.employee')}</option>
           </select>
           <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition">
             <Plus className="w-4 h-4" />
@@ -75,18 +75,18 @@ export default function UserManagement() {
             </div>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <input value={form.employee_id} onChange={e => setForm({...form, employee_id: e.target.value})} placeholder="Employee ID" className="px-3 py-2 border rounded-lg" required />
+                <input value={form.employee_id} onChange={e => setForm({...form, employee_id: e.target.value})} placeholder={t('login.employeeId')} className="px-3 py-2 border rounded-lg" required />
                 <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder={t('user.name')} className="px-3 py-2 border rounded-lg" required />
                 <input value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder={t('user.email')} className="px-3 py-2 border rounded-lg" required type="email" />
                 <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="px-3 py-2 border rounded-lg">
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
+                  <option value="employee">{t('user.roles.employee')}</option>
+                  <option value="manager">{t('user.roles.manager')}</option>
+                  <option value="admin">{t('user.roles.admin')}</option>
                 </select>
                 <input value={form.department} onChange={e => setForm({...form, department: e.target.value})} placeholder={t('user.department')} className="px-3 py-2 border rounded-lg" />
                 <input value={form.facility} onChange={e => setForm({...form, facility: e.target.value})} placeholder={t('user.facility')} className="px-3 py-2 border rounded-lg" />
                 <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder={t('user.phone')} className="px-3 py-2 border rounded-lg" />
-                <input value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="Password" className="px-3 py-2 border rounded-lg" type="password" />
+                <input value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder={t('login.password')} className="px-3 py-2 border rounded-lg" type="password" />
               </div>
               <button type="submit" className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition">{t('user.create')}</button>
             </form>
@@ -98,14 +98,14 @@ export default function UserManagement() {
         <table className="w-full">
           <thead className="bg-gray-50 text-left text-sm text-gray-500">
             <tr>
-              <th className="px-4 py-3">ID</th>
-              <th className="px-4 py-3">{t('user.name')}</th>
-              <th className="px-4 py-3">{t('user.email')}</th>
-              <th className="px-4 py-3">{t('user.role')}</th>
-              <th className="px-4 py-3">{t('user.department')}</th>
-              <th className="px-4 py-3">{t('user.facility')}</th>
-              <th className="px-4 py-3">{t('common.status')}</th>
-              <th className="px-4 py-3">{t('common.actions')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">ID</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('user.name')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('user.email')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('user.role')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('user.department')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('user.facility')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('common.status')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
