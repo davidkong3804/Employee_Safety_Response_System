@@ -23,6 +23,7 @@ Acceptance thresholds (check in the HTML report):
 """
 
 import random
+from typing import Optional
 
 from locust import HttpUser, between, task
 
@@ -44,7 +45,7 @@ _active_event_ids: list[str] = []
 class _BaseUser(HttpUser):
     abstract = True
     wait_time = between(1, 3)
-    _token: str | None = None
+    _token: Optional[str] = None
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
