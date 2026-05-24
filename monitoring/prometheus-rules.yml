@@ -1,0 +1,51 @@
+groups:
+  - name: safety-response-alerts
+    rules:
+      # High error rate: >5% 5xx in the last 1 minute
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="safety-response-backend", status="5xx"}[1m]))
+          /
+          sum(rate(http_requests_total{job="safety-response-backend"}[1m])) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate (>5%)"
+          description: "5xx error rate is {{ $value | humanizePercentage }} over the last minute."
+
+      # High latency: p95 > 1s
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="safety-response-backend"}[1m])) by (le)
+          ) > 1.0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 response time (>1s)"
+          description: "p95 latency is {{ $value | humanizeDuration }}."
+
+      # Backend down: no metrics scraped for 1 minute
+      - alert: BackendDown
+        expr: up{job="safety-response-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend is down"
+          description: "Prometheus cannot scrape the backend /metrics endpoint."
+
+      # High 4xx rate: >20% client errors
+      - alert: High4xxRate
+        expr: |
+          sum(rate(http_requests_total{job="safety-response-backend", status="4xx"}[1m]))
+          /
+          sum(rate(http_requests_total{job="safety-response-backend"}[1m])) > 0.20
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 4xx error rate (>20%)"
+          description: "4xx error rate is {{ $value | humanizePercentage }}. Possible auth issues or bad requests."
