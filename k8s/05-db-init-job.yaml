@@ -1,9 +1,15 @@
 # Runs once: creates tables and seeds demo data. This replaces the old
 # create-tables-and-seed-on-every-pod-startup behaviour, which raced across
-# replicas. The job is idempotent (create_all is checkfirst; seeding skips
-# when users already exist), so retries are safe.
+# replicas. The job is idempotent (create_all is checkfirst; seed_data()
+# loads existing employee_ids first and inserts only the missing ones),
+# so re-running after a seed expansion will safely top up new accounts.
 #
-# A Job spec is immutable — to re-run after a code change:
+# Tag: `:latest` — the CI deploy job pushes the new build to both
+# backend:<sha> and backend:latest. Re-applying this Job after a deploy
+# therefore picks up the newest seed code. `imagePullPolicy: Always`
+# guarantees the kubelet re-pulls instead of reusing a cached digest.
+#
+# A Job spec is immutable — to re-run after a seed.py change:
 #   kubectl -n safety-system delete job db-init && kubectl apply -f k8s/05-db-init-job.yaml
 apiVersion: batch/v1
 kind: Job
@@ -24,7 +30,8 @@ spec:
         runAsGroup: 10001
       containers:
         - name: db-init
-          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:v1
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:latest
+          imagePullPolicy: Always
           command: ["python", "-m", "app.init_db", "--seed"]
           envFrom:
             - configMapRef:

@@ -23,21 +23,35 @@ Acceptance thresholds (check in the HTML report):
 """
 
 import random
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import requests
 from locust import HttpUser, between, events, task
 
+# Pre-warm pool size sentinels — see warmup_tokens() for the rationale.
+WARMUP_MAX_TOKENS = 2000        # absolute upper bound (~ Locust GitHub Action runner mem budget)
+WARMUP_PARALLELISM = 50         # concurrent login requests during warmup
+WARMUP_OVERFETCH_FACTOR = 2     # warm 2× VU count so random.choice has slack
+
 # ---------------------------------------------------------------------------
 # Seed credentials (password123 for all)
+#
+# Capacity must match backend/app/seed.py LOAD_TEST_MAX_EMPLOYEES — currently
+# 15000. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
+# are auto-generated test accounts with 4-or-more-digit IDs.
 # ---------------------------------------------------------------------------
+LOAD_TEST_MAX_EMPLOYEES = 15000
+
 ADMIN_CREDS = {"employee_id": "A001", "password": "password123"}
 MANAGER_CREDS = [
     {"employee_id": f"M{i:03d}", "password": "password123"} for i in range(1, 6)
 ]
-EMPLOYEE_CREDS = [
-    {"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)
-]
+EMPLOYEE_CREDS = (
+    [{"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)]
+    + [{"employee_id": f"E{i:04d}", "password": "password123"}
+       for i in range(31, LOAD_TEST_MAX_EMPLOYEES + 1)]
+)
 
 # Shared cache – populated once when an AdminUser starts up
 _active_event_ids: list[str] = []
@@ -51,31 +65,58 @@ _token_pool: dict[str, str] = {}
 
 @events.test_start.add_listener
 def warmup_tokens(environment, **kwargs) -> None:
-    """Pre-fetch a JWT for every seed account before users spawn.
+    """Pre-fetch JWTs before VUs spawn, so the bcrypt cost doesn't pollute
+    the business-endpoint metrics.
 
-    bcrypt(rounds=12) makes POST /api/auth/login CPU-bound (~250ms each).
-    Logging in hundreds of users simultaneously saturates backend CPU and
-    pollutes the latency metrics of every other endpoint. Fetching all tokens
-    once, up-front, isolates the bcrypt cost from the business endpoints so the
-    report reflects how stats / report / events actually scale.
+    Two changes from the original implementation:
+      1. **Concurrent fetch**: 15000 sequential logins at ~300ms each takes
+         ~75 minutes. ThreadPoolExecutor(50) overlaps requests so the
+         async-bcrypt backend can use multiple threads in parallel.
+      2. **Bounded warmup**: only pre-warm tokens we actually need. A test
+         with N VUs distributes credentials via `random.choice`, so the
+         expected unique-credential count is ≤ N. We warm
+         `WARMUP_OVERFETCH_FACTOR × N` (default 2×) for slack, capped at
+         `WARMUP_MAX_TOKENS`. VUs that draw an unwarmed credential fall
+         through to live login (still cheap with async bcrypt).
     """
     host = (environment.host or "").rstrip("/")
     if not host:
         print("[warmup] no host configured – skipping token pre-fetch")
         return
-    all_creds = EMPLOYEE_CREDS + MANAGER_CREDS + [ADMIN_CREDS]
-    ok = 0
-    for creds in all_creds:
+
+    # Derive how many tokens to warm from the planned VU count
+    num_users = 0
+    try:
+        num_users = int(getattr(environment.parsed_options, "num_users", 0) or 0)
+    except (AttributeError, TypeError, ValueError):
+        num_users = 0
+    target_employee_count = (
+        min(num_users * WARMUP_OVERFETCH_FACTOR, len(EMPLOYEE_CREDS), WARMUP_MAX_TOKENS)
+        if num_users > 0
+        else min(len(EMPLOYEE_CREDS), WARMUP_MAX_TOKENS)
+    )
+    employees_to_warm = EMPLOYEE_CREDS[:target_employee_count]
+    all_creds = employees_to_warm + MANAGER_CREDS + [ADMIN_CREDS]
+
+    def _login_one(creds: dict) -> Optional[tuple]:
         try:
-            r = requests.post(
-                f"{host}/api/auth/login", json=creds, timeout=30
-            )
+            r = requests.post(f"{host}/api/auth/login", json=creds, timeout=30)
             if r.status_code == 200:
-                _token_pool[creds["employee_id"]] = r.json()["access_token"]
-                ok += 1
+                return creds["employee_id"], r.json()["access_token"]
         except requests.RequestException:
-            pass
-    print(f"[warmup] pre-fetched {ok}/{len(all_creds)} tokens from {host}")
+            return None
+        return None
+
+    ok = 0
+    with ThreadPoolExecutor(max_workers=WARMUP_PARALLELISM) as ex:
+        for result in ex.map(_login_one, all_creds):
+            if result:
+                _token_pool[result[0]] = result[1]
+                ok += 1
+    print(
+        f"[warmup] pre-fetched {ok}/{len(all_creds)} tokens from {host} "
+        f"(num_users={num_users}, parallelism={WARMUP_PARALLELISM})"
+    )
 
 
 class _BaseUser(HttpUser):

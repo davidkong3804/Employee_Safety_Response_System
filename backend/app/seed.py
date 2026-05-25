@@ -11,16 +11,45 @@ from app.modules.users.models import User
 
 DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
+# Capacity planning: load tests run up to 15000 concurrent virtual users.
+# The first 30 employees (E001–E030) are hand-crafted demo data; the rest
+# are auto-generated test accounts (E0031–E15000). Bump this number if
+# stress tests need more capacity — both seed.py and locustfile.py should
+# stay in sync.
+LOAD_TEST_MAX_EMPLOYEES = 15000
+
 
 async def seed_data():
-    async with async_session() as session:
-        # Check if already seeded
-        result = await session.execute(select(User).limit(1))
-        if result.scalar_one_or_none():
-            return
+    """Idempotent demo seed.
 
-        # --- Create Managers ---
-        managers = []
+    Old behaviour ("if any user exists, return") meant that any later
+    expansion of the seed (e.g. adding the E0031–E1000 load-test cohort)
+    could never apply to an already-seeded cluster — re-running the
+    db-init Job was a no-op.
+
+    New behaviour:
+      1. Look up which employee_ids already exist in the DB.
+      2. In every user-creation loop, skip the entries that exist and
+         insert the rest.
+      3. The events + safety_reports block runs only when no Event row
+         exists — so demo events are not duplicated. Filling in the
+         placeholder reports for *newly added* users is left to admins
+         (create a new event via the API and every active user gets one
+         placeholder automatically).
+    """
+    async with async_session() as session:
+        # ---- existing-data snapshot -------------------------------------
+        existing_emp_ids = {
+            row[0]
+            for row in (await session.execute(select(User.employee_id))).all()
+        }
+        events_already_exist = (
+            await session.execute(select(Event).limit(1))
+        ).scalar_one_or_none() is not None
+
+        added_user_count = 0
+
+        # ---- managers ---------------------------------------------------
         manager_data = [
             ("M001", "王建明", "wang.jm@tsmc.com", "manager", "製造一部", "Fab14", "0912-111-001"),
             ("M002", "李淑芬", "lee.sf@tsmc.com", "manager", "製造二部", "Fab14", "0912-111-002"),
@@ -29,34 +58,48 @@ async def seed_data():
             ("M005", "劉大偉", "liu.dw@tsmc.com", "manager", "品質部", "Fab18", "0912-111-005"),
         ]
         for eid, name, email, role, dept, facility, phone in manager_data:
-            m = User(
+            if eid in existing_emp_ids:
+                continue
+            session.add(User(
                 employee_id=eid, name=name, email=email,
                 password_hash=DEFAULT_PASSWORD, role=role,
                 department=dept, facility=facility, phone=phone,
-            )
-            session.add(m)
-            managers.append(m)
+            ))
+            added_user_count += 1
         await session.flush()
 
-        # --- Create Admins ---
-        admins = []
+        # Refresh: managers list contains both pre-existing and just-created rows,
+        # ordered by employee_id so mgr_idx 0..4 maps to M001..M005 deterministically.
+        managers = list(
+            (await session.execute(
+                select(User).where(User.role == "manager").order_by(User.employee_id)
+            )).scalars().all()
+        )
+
+        # ---- admins -----------------------------------------------------
         admin_data = [
             ("A001", "廖唯辰", "liao.wc@tsmc.com", "admin", "資訊部", "Fab14", "0912-222-001"),
             ("A002", "黃正宏", "huang.zh@tsmc.com", "admin", "資訊部", "Fab18", "0912-222-002"),
             ("A003", "林雅婷", "lin.yt@tsmc.com", "admin", "資訊部", "Fab14", "0912-222-003"),
         ]
         for eid, name, email, role, dept, facility, phone in admin_data:
-            a = User(
+            if eid in existing_emp_ids:
+                continue
+            session.add(User(
                 employee_id=eid, name=name, email=email,
                 password_hash=DEFAULT_PASSWORD, role=role,
                 department=dept, facility=facility, phone=phone,
-            )
-            session.add(a)
-            admins.append(a)
+            ))
+            added_user_count += 1
         await session.flush()
 
-        # --- Create Employees ---
-        employees = []
+        admins = list(
+            (await session.execute(
+                select(User).where(User.role == "admin").order_by(User.employee_id)
+            )).scalars().all()
+        )
+
+        # ---- employees E001–E030 (named) -------------------------------
         employee_data = [
             ("E001", "蔡明軒", "tsai.mx@tsmc.com", "製造一部", "Fab14", "0912-333-001", 0),
             ("E002", "吳佳蓉", "wu.jr@tsmc.com", "製造一部", "Fab14", "0912-333-002", 0),
@@ -90,23 +133,27 @@ async def seed_data():
             ("E030", "劉淑玲", "liu.sl@tsmc.com", "品質部", "Fab18", "0912-333-030", 4),
         ]
         for eid, name, email, dept, facility, phone, mgr_idx in employee_data:
-            e = User(
+            if eid in existing_emp_ids:
+                continue
+            session.add(User(
                 employee_id=eid, name=name, email=email,
                 password_hash=DEFAULT_PASSWORD, role="employee",
                 department=dept, facility=facility, phone=phone,
                 manager_id=managers[mgr_idx].id,
-            )
-            session.add(e)
-            employees.append(e)
+            ))
+            added_user_count += 1
         await session.flush()
 
-        # --- Create extra load-test employees (E031–E1000) ---
+        # ---- extra load-test employees E0031 – E{LOAD_TEST_MAX_EMPLOYEES} -
         depts    = ["製造一部", "製造二部", "製造一部", "設備部", "品質部"]
         facilits = ["Fab14", "Fab14", "Fab18", "Fab14", "Fab18"]
-        for i in range(31, 1001):
+        for i in range(31, LOAD_TEST_MAX_EMPLOYEES + 1):
+            eid = f"E{i:04d}"
+            if eid in existing_emp_ids:
+                continue
             mgr_idx = (i - 1) % len(managers)
-            e = User(
-                employee_id=f"E{i:04d}",
+            session.add(User(
+                employee_id=eid,
                 name=f"測試員工{i:04d}",
                 email=f"test.emp{i:04d}@tsmc.com",
                 password_hash=DEFAULT_PASSWORD,
@@ -115,15 +162,58 @@ async def seed_data():
                 facility=facilits[mgr_idx],
                 phone=f"09{i:08d}",
                 manager_id=managers[mgr_idx].id,
-            )
-            session.add(e)
-            employees.append(e)
+            ))
+            added_user_count += 1
         await session.flush()
 
-        all_users = admins + managers + employees
+        # ---- short-circuit if events already exist ---------------------
+        if events_already_exist:
+            # Top up placeholder reports for any active event that's missing
+            # entries for the newly-added users. Without this step a load test
+            # against existing events would 404 on submit_report for E0031+.
+            # Mirrors the production POST /api/events logic: filter by event
+            # facility (NULL = all) and only include is_active users.
+            topped_up = 0
+            active_events = (await session.execute(
+                select(Event).where(Event.status == "active")
+            )).scalars().all()
 
-        # --- Create Events ---
-        # Event 1: Active earthquake event
+            for ev in active_events:
+                # Existing user_ids already covered for this event
+                existing_uids = {
+                    row[0]
+                    for row in (await session.execute(
+                        select(SafetyReport.user_id).where(SafetyReport.event_id == ev.id)
+                    )).all()
+                }
+                # Target user set — active users, filtered by event facility
+                users_q = select(User.id).where(User.is_active.is_(True))
+                if ev.facility:
+                    users_q = users_q.where(User.facility.in_(ev.facility))
+                target_uids = {row[0] for row in (await session.execute(users_q)).all()}
+
+                missing = target_uids - existing_uids
+                if missing:
+                    session.add_all([
+                        SafetyReport(event_id=ev.id, user_id=uid) for uid in missing
+                    ])
+                    topped_up += len(missing)
+
+            await session.commit()
+            print(
+                f"✅ Seed: ensured users ({added_user_count} added); "
+                f"topped up {topped_up} placeholder reports across "
+                f"{len(active_events)} active event(s). Demo events not re-created."
+            )
+            return
+
+        # ---- fresh-DB only: build demo events + placeholder reports ----
+        # Need the full user list (admins + managers + all employees) to
+        # generate a placeholder report per user.
+        all_users = list(
+            (await session.execute(select(User))).scalars().all()
+        )
+
         event1 = Event(
             title="2026-04-13 台南地震警報",
             description="台南地區發生規模5.2地震，請全體員工立即回報安全狀態。",
@@ -135,7 +225,6 @@ async def seed_data():
         )
         session.add(event1)
 
-        # Event 2: Closed fire drill
         event2 = Event(
             title="2026-03-20 消防演習",
             description="年度消防演習已結束，感謝各位配合。",
@@ -148,12 +237,10 @@ async def seed_data():
         session.add(event2)
         await session.flush()
 
-        # --- Create Safety Reports ---
-        # Event 1 (active): partial reporting - some safe, some need help, many unreported
+        # Event 1 (active): partial reporting — some safe, some need help, many unreported
         random.seed(42)
         for user in all_users:
             report = SafetyReport(event_id=event1.id, user_id=user.id)
-            # ~40% reported safe, ~5% need help, ~55% unreported
             roll = random.random()
             if roll < 0.40:
                 report.status = "safe"
@@ -182,7 +269,9 @@ async def seed_data():
             session.add(report)
 
         await session.commit()
-        print("✅ Demo data seeded successfully!")
+        print(
+            f"✅ Demo data seeded successfully! ({added_user_count} users + 2 events + placeholder reports)"
+        )
         print("   Login accounts (password: password123):")
         print("   Admin:    A001 (廖唯辰)")
         print("   Manager:  M001 (王建明)")

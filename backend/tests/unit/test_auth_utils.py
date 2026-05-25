@@ -24,17 +24,20 @@ class TestHashPassword:
 
 
 class TestVerifyPassword:
-    def test_correct_password_returns_true(self):
+    # verify_password is now async (offloads bcrypt to a thread pool so it
+    # doesn't block the event loop). pytest.ini has `asyncio_mode = auto`
+    # so `async def test_...` is auto-collected as an asyncio test.
+    async def test_correct_password_returns_true(self):
         hashed = hash_password("secret")
-        assert verify_password("secret", hashed) is True
+        assert await verify_password("secret", hashed) is True
 
-    def test_wrong_password_returns_false(self):
+    async def test_wrong_password_returns_false(self):
         hashed = hash_password("secret")
-        assert verify_password("wrong", hashed) is False
+        assert await verify_password("wrong", hashed) is False
 
-    def test_empty_password_wrong_returns_false(self):
+    async def test_empty_password_wrong_returns_false(self):
         hashed = hash_password("secret")
-        assert verify_password("", hashed) is False
+        assert await verify_password("", hashed) is False
 
 
 class TestCreateAccessToken:
