@@ -44,8 +44,9 @@ class TestListEvents:
         assert "OtherFab Event" not in titles
 
     async def test_active_events_come_before_closed(self, client, active_event, admin_headers, db_session):
-        from app.modules.events.models import Event
         from datetime import datetime, timezone
+
+        from app.modules.events.models import Event
 
         # Create a closed event
         closed = Event(

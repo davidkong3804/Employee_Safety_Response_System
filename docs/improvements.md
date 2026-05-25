@@ -17,8 +17,8 @@
 | A2 | `docs/deployment.md` L119-120 | 同上，寫「Backend HPA: 3–30」「Frontend HPA: 2–10」 | 同上，應為 1–30 / 1–10 |
 | A3 | `docs/deployment.md` L139-144 | 寫 `max_connections=200`、`30 x 5 = 150 < 200` | 實際 `k8s/03-postgres.yaml` 設 `max_connections=350` |
 | A4 | `k8s/01-configmap.yaml` L17-19 | 註解寫 `60 x (3+2) = 300 < 350` | backend HPA `maxReplicas` 實際是 30，不是 60 |
-| A5 | `docs/er-diagram.md` EVENTS 表 L22-32 | 缺 `facility` 欄位 | `Event.facility` 已改為 `ARRAY(String(50))`（多選廠區），ER 圖需補上 `varchar(50)[] facility` |
-| A6 | `docs/api-spec.md` `POST /api/events` 請求範例 L72-80 | 請求 body 缺 `facility` 欄位 | `EventCreate` 已支援 `facility: list[str] \| null`（多選廠區，省略=全廠區） |
+| A5 | ~~`docs/er-diagram.md` EVENTS 表~~ | ✅ **已修 (2026-05-25)**：EVENTS 表加上 `facility` 陣列欄位 + Table Details 補上 facility 章節說明 | — |
+| A6 | ~~`docs/api-spec.md` `POST /api/events`~~ | ✅ **已修 (2026-05-25)**：POST 範例 body 含 `facility` 陣列、補上 `facility` 欄位的語意說明（空/null = 全廠區）| — |
 
 > 註：`er-diagram.md` L15 與 `api-spec.md` L53 的 `facility` 是 **User** 的欄位，仍為 `varchar(50)` 字串，**正確不需改**。只有 **Event** 的 facility 改成了陣列。
 
@@ -122,6 +122,13 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
   - 頁面：`Login.test.tsx`（登入後依角色 redirect）、`ReportPage.test.tsx`（一鍵回報核心流程 / 已回報視圖）
   - 同步擴充 `vitest.setup.ts` 的 i18n keys（`app.title` / `report.*` / `event.allFacilities` / `facility.*`）
 - **CI trigger 補洞（2026-05-25）**：`.github/workflows/ci.yml` 的 `push.branches` 原本只列 `[main, feature/**, fix/**]`，`test/**` 與 `docs/**` 分支推送會靜默不跑 CI（上面前端測試擴充 PR 第一次推就踩到）。補上後所有慣用 prefix 都會跑測試 jobs；`build-and-push` 與 `deploy` 仍 gate 在 main，不會誤觸發部署
+- **程式碼品質基線（2026-05-25）**：先前評鑑時發現是唯一硬缺口，現補上
+  - 前端：`frontend/eslint.config.js`（ESLint 9 flat config，TypeScript + 瀏覽器/測試 globals，rules 採寬鬆策略避免動到既有 code）+ `.prettierrc.json`（吻合既有 no-semi / single-quote 風格）+ `.prettierignore`
+  - 後端：`backend/pyproject.toml` 加上 `[tool.ruff]` 設定（F + E + W + I 規則 + isort，line-length=120，tests 目錄放寬 F401/F811）
+  - CI：新增 `lint` job（Job 0），跑 `ruff check` + ESLint，Prettier `--check` 標 `continue-on-error` 為轉移期（codebase 預先存在不符 Prettier 格式的檔案）
+  - 工具不寫進 `package.json` / `requirements.txt`，CI 用 `npm install -g` / `pip install` 動態安裝，避免 lockfile 同步問題
+  - **A5/A6 同步修畢**：ER 圖 + API spec 補上 Event.facility 陣列說明
+- **文件不一致修補（2026-05-25）**：A5、A6 完成（見 A 區）
 
 ---
 
@@ -129,8 +136,9 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 
 1. **🔴 E1** — 設定 CI secrets，讓 pipeline 能跑（GitHub UI 操作，僅你能做）
 2. ~~🔴 D1~~ — ✅ secrets 已移出版控；正式上線前仍須換真值並評估 Secret Manager
-3. **🟡 A1–A6** — 修文件不一致（低成本、避免誤導）
+3. ~~🟡 A5、A6~~ — ✅ 已修；剩 A1–A4（HPA 副本數、`max_connections` 等註解口誤）
 4. **🟡 B1–B4** — 前端錯誤處理與二次確認（體驗品質）
 5. **🟡 E2** — 導入 Kustomize 解決 image tag drift
 6. **🟡 C3** — Redis 接上 dashboard 快取（壓測前做，效益明顯）
-7. **🟢 F、G** — 監控與未來功能，依專案時程排入
+7. **🟡 Prettier strict 化** — 跑一次 `pnpm exec prettier --write src/`，然後拿掉 CI 的 `continue-on-error`
+8. **🟢 F、G** — 監控與未來功能，依專案時程排入

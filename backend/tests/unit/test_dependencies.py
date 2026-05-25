@@ -1,7 +1,8 @@
 """Unit tests for require_role dependency – no database required."""
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import HTTPException
-from unittest.mock import MagicMock
 
 from app.dependencies import require_role
 from app.modules.users.models import User

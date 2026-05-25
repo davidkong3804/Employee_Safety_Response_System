@@ -1,0 +1,50 @@
+# Ruff configuration — single source of truth for linting + import sorting.
+# pytest config stays in pytest.ini (kept separate for clarity).
+#
+# Locally:
+#     pip install ruff
+#     ruff check .                  # lint
+#     ruff check --fix .            # auto-fix safe lints
+#     ruff format .                 # auto-format (Black-compatible, optional)
+#
+# CI: see .github/workflows/ci.yml `lint` job — runs `ruff check` only.
+# `ruff format --check` is not gated in CI yet (codebase predates Ruff
+# formatting; turn on after a one-shot `ruff format .` cleanup).
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = [
+    "alembic/",
+    "build/",
+    "dist/",
+    "__pycache__/",
+]
+
+[tool.ruff.lint]
+# Conservative rule set so the existing codebase passes on day 1:
+#   F  = pyflakes (real bugs: undefined names, unused imports, redefinitions)
+#   E  = pycodestyle errors (syntax / indentation problems)
+#   W  = pycodestyle warnings
+#   I  = isort (import ordering)
+select = ["F", "E", "W", "I"]
+
+# Allow long lines case-by-case (most are SQL or string literals).
+# E501 is also covered by line-length above.
+ignore = [
+    "E501",   # line too long — handled by line-length
+    "E731",   # lambda assignment — sometimes clearer in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately use star imports / unused fixtures
+"tests/**/*.py" = ["F401", "F811"]
+# conftest.py intentionally sets DATABASE_URL env BEFORE importing app —
+# `app.config` reads env vars at import time, so the ordering is required
+# and conflicts with E402 (module-level import not at top) and isort.
+"tests/conftest.py" = ["E402", "I001", "F401", "F811"]
+# __init__.py re-exports
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

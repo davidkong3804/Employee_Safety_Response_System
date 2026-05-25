@@ -65,7 +65,7 @@ List all events (active first, then by created_at desc).
 **Auth:** Any authenticated user
 
 ### POST /api/events
-Create a new emergency event. Automatically generates safety_report records for all active users.
+Create a new emergency event. Automatically generates `safety_report` placeholder records for the affected user set.
 
 **Auth:** Admin only
 
@@ -75,9 +75,14 @@ Create a new emergency event. Automatically generates safety_report records for 
   "title": "2026-04-13 Earthquake",
   "description": "Please report your safety status immediately.",
   "event_type": "earthquake",
-  "severity": "high"
+  "severity": "high",
+  "facility": ["Fab14", "Fab18"]
 }
 ```
+
+**`facility` (optional)**: `string[] | null`. Fab codes affected by this event. When omitted or `null`, the event is treated as **all facilities** and a placeholder is generated for every active user. When supplied, only users whose `User.facility` matches one of the listed fabs receive a placeholder.
+
+**Response 201:** the created event, including the `facility` array as stored (or `null`).
 
 ### PATCH /api/events/{event_id}
 Update event details or close event.

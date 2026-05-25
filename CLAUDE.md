@@ -53,6 +53,22 @@ pnpm vitest run src/__tests__/components/StatusBadge.test.tsx   # Single file
 npx tsc --noEmit                  # Type-check without building
 ```
 
+### Lint / Format
+ESLint and Prettier tools are **not** in `package.json` (avoids lockfile churn) — install on demand:
+```bash
+# Frontend (from frontend/)
+npx --yes eslint@9 src/                                  # lint
+npx --yes prettier@3 --check 'src/**/*.{ts,tsx,json,css}'  # format check
+npx --yes prettier@3 --write 'src/**/*.{ts,tsx,json,css}'  # auto-format
+
+# Backend (from backend/)
+pip install ruff==0.7.4
+ruff check .                                             # lint
+ruff check --fix .                                       # auto-fix lints
+ruff format .                                            # auto-format (Black-compatible)
+```
+CI's `lint` job (`.github/workflows/ci.yml`) runs `ruff check` + `eslint` on every push; `prettier --check` is informational (`continue-on-error: true`) until the codebase is one-shot formatted.
+
 ### E2E (Playwright) — run from `tests/e2e/`
 ```bash
 npm install && npx playwright install --with-deps chromium

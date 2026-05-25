@@ -8,6 +8,61 @@ on:
 
 jobs:
   # ----------------------------------------------------------------
+  # Job 0: Lint — code style and obvious-bug checks across the repo.
+  # Tools are installed on-the-fly (no package.json / requirements.txt
+  # touched) so the lockfiles stay reproducible.
+  # ----------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Backend: Ruff (pyflakes + pycodestyle + isort) ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ruff
+        run: pip install ruff==0.7.4
+
+      - name: Ruff lint (backend)
+        working-directory: backend
+        run: ruff check .
+
+      # ---- Frontend: ESLint + Prettier ----
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ESLint + Prettier into frontend/node_modules
+        # `npm install --no-save --no-package-lock` populates node_modules
+        # without touching package.json or creating package-lock.json.
+        # Local install (not global) is required because eslint.config.js
+        # uses ESM `import` statements that resolve against the project's
+        # node_modules, not the global npm path.
+        working-directory: frontend
+        run: |
+          npm install --no-save --no-package-lock \
+            eslint@^9 \
+            @eslint/js@^9 \
+            typescript-eslint@^8 \
+            prettier@^3
+
+      - name: ESLint (frontend)
+        working-directory: frontend
+        run: npx eslint src/
+
+      - name: Prettier check (frontend)
+        working-directory: frontend
+        continue-on-error: true
+        run: npx prettier --check 'src/**/*.{ts,tsx,json,css}'
+        # `continue-on-error` is set because the codebase predates Prettier;
+        # the team should run `prettier --write src/` once and then remove
+        # this line so formatting is strictly enforced.
+
+  # ----------------------------------------------------------------
   # Job 1: Backend unit tests (no database)
   # ----------------------------------------------------------------
   backend-unit:
