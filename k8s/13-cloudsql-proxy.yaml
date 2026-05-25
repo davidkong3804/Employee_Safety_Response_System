@@ -82,6 +82,15 @@ spec:
         app: cloudsql-proxy
     spec:
       serviceAccountName: cloudsql-proxy-sa
+      # Spread the 2 proxy pods across zones so a single-zone outage
+      # doesn't take both connections to Cloud SQL down with it.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: cloudsql-proxy
       containers:
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2

@@ -8,7 +8,9 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: frontend
-  minReplicas: 1
+  # Floor at 2 so the frontend tier never scales below HA. The
+  # Deployment itself also defaults to replicas: 2 (see 08-frontend.yaml).
+  minReplicas: 2
   maxReplicas: 10
   metrics:
     - type: Resource

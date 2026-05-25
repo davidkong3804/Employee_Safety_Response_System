@@ -34,11 +34,36 @@ spec:
     metadata:
       labels:
         app: backend
+      annotations:
+        # Tell Managed Prometheus (GKE built-in) to scrape this pod's
+        # /metrics endpoint exposed by prometheus-fastapi-instrumentator.
+        # The /metrics path lives on the backend container (port 8000)
+        # and is excluded from the OpenAPI schema (include_in_schema=False
+        # in main.py).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+      # Give Kubernetes 40s to fully drain a pod during rollouts. The preStop
+      # sleep below uses 5s of that; the remaining 35s covers in-flight HTTP
+      # requests and asyncpg connection close. Default 30s was occasionally
+      # leaving sub-1% of requests with 502s during rolling deploys.
+      terminationGracePeriodSeconds: 40
+      # Spread backend pods across zones so a single-zone failure can't take
+      # down the whole tier. `ScheduleAnyway` (soft) means we never block
+      # scheduling when an HPA scale-up needs more pods than zones have
+      # capacity for — eventual consistency wins over hard correctness here.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
       containers:
         - name: backend
           image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:v1
@@ -49,6 +74,14 @@ spec:
                 name: backend-config
             - secretRef:
                 name: backend-secret
+          # preStop sleep gives the GKE Ingress NEG controller time to mark
+          # this endpoint NotReady and stop sending new requests before the
+          # container receives SIGTERM. Without this, NEG keeps routing to a
+          # pod that's already shutting down, producing 5xx during deploys.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           # Liveness: process is up. Cheap, no DB dependency — a DB blip
           # must not trigger a pod restart.
           livenessProbe:

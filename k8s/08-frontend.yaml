@@ -19,7 +19,10 @@ metadata:
   name: frontend
   namespace: safety-system
 spec:
-  replicas: 1
+  # 2 replicas as the floor — single-pod frontend was a SPOF since the
+  # SPA is served entirely from nginx. HPA (09-frontend-hpa.yaml) also
+  # bumps minReplicas to 2 so it never scales back down to 1.
+  replicas: 2
   selector:
     matchLabels:
       app: frontend
@@ -35,6 +38,14 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+      # Spread frontend pods across zones (load-test-handoff Phase A #4).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: frontend
       containers:
         - name: frontend
           image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/frontend:v1
