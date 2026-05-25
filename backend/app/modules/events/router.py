@@ -1,8 +1,9 @@
+import uuid as _uuid
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import String, cast, delete, select
+from sqlalchemy import String, cast, delete, insert as sa_insert, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,23 +94,35 @@ async def create_event(
 
     # Create safety_report placeholders for active employees in the affected facility.
     # `.is_(True)` is the SQLAlchemy 2.0 canonical way to filter on a boolean column —
-    # equivalent to `== True` but Ruff-clean (avoids E712).
-    users_query = select(User).where(User.is_active.is_(True))
+    # equivalent to `== True` but Ruff-clean (avoids E712). Pulling only the columns
+    # we need (id + snapshot fields) cuts ~75% of the row payload for the 15k-user
+    # Fab14-wide event case.
+    users_query = select(
+        User.id, User.manager_id, User.department, User.facility,
+    ).where(User.is_active.is_(True))
     if event.facility:
         users_query = users_query.where(User.facility.in_(event.facility))
-    users_result = await db.execute(users_query)
-    for user in users_result.scalars().all():
-        # Snapshot the user's current org so the historical view stays
-        # stable even if the user later changes manager / department /
-        # facility. See SafetyReport docstring for the full rationale.
-        report = SafetyReport(
-            event_id=event.id,
-            user_id=user.id,
-            manager_id_snapshot=user.manager_id,
-            department_snapshot=user.department,
-            facility_snapshot=user.facility,
-        )
-        db.add(report)
+    user_rows = (await db.execute(users_query)).all()
+
+    if user_rows:
+        # Bulk INSERT via Core (executemany) rather than 15k individual db.add()
+        # calls. asyncpg + SQLAlchemy 2.0 batches this through insertmanyvalues,
+        # so a single round-trip writes the whole placeholder set. `id` is
+        # explicit because the executemany path doesn't run Python-side defaults
+        # — UUIDs generated client-side keep the inserts in order.
+        # Snapshot fields freeze the user's org at event-creation time (C6).
+        placeholders = [
+            {
+                "id": _uuid.uuid4(),
+                "event_id": event.id,
+                "user_id": user_id,
+                "manager_id_snapshot": manager_id,
+                "department_snapshot": department,
+                "facility_snapshot": facility,
+            }
+            for user_id, manager_id, department, facility in user_rows
+        ]
+        await db.execute(sa_insert(SafetyReport), placeholders)
 
     await cache_invalidate_pattern("events:list:*")
     return _event_to_response(event)

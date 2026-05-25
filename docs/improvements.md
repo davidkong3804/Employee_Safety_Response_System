@@ -44,7 +44,7 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 
 | # | 位置 | 問題 | 建議 |
 |---|------|------|------|
-| C1 | `events/router.py` `create_event` L80-82 | 逐筆 `db.add(report)` 迴圈建立 placeholder | 員工數上萬時應改 `insert().values([...])` 批次插入 |
+| C1 | ~~`events/router.py` `create_event`~~ + ~~`seed.py` 增量 top-up~~ | ✅ **已修 (2026-05-25 第六批)**：兩處都改 `await db.execute(sa_insert(SafetyReport), [params])` Core executemany，配上明示的 `id=uuid.uuid4()`（executemany 不跑 Python-side default）。SELECT 也改成只撈 4 欄 tuple，減少 ORM 物件構建。Fab14-wide 事件（~9k 員工）由 9000 個 INSERT statement 壓成 1 趟 round-trip | — |
 | C2 | `events/router.py` `update_event` L106 | 用 full `db.refresh(event)`，與 `create_event` 的 targeted refresh（`attribute_names=['created_at']`）不一致 | **需驗證**：若 asyncpg 讀回 `ARRAY` 欄位的問題仍在，編輯有廠區的事件會踩雷。建議統一改 targeted refresh |
 | C3 | ~~`reports/router.py` `get_event_stats` / `stats/by-department`~~ | ✅ **已修 (2026-05-25 第四批)**：`app/cache.py` 接 Redis，stats / by-department 兩端點 5 秒短 TTL 快取；`submit_report` / `update_event` / `delete_event` 都會 invalidate 該 event 的 stats 快取 pattern；`CACHE_DISABLED=1` env 給 test suite 跳過 | — |
 | C4 | `list_events` / `list_users` / `all-status` / `team-status` | 無分頁，一次回傳全部 | 大規模部署加 `limit`/`offset` 或 cursor 分頁 |
@@ -154,6 +154,13 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
   - **(擴充性) C6 規劃**：新增追蹤項——`safety_reports` 沒有保存「事件當下」的 org 快照，員工換主管後舊事件回溯改變；需 Alembic migration 加 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot` 欄位
   - **(可靠性) D3 升級 🔴**：Postgres 單實例是目前唯一明確的 SPOF。正式環境必須遷 Cloud SQL Enterprise Plus（regional HA + auto failover + PITR backup）；improvements.md D3 row 補完遷移步驟
   - **(可靠性) C7 規劃**：新增 rate limiting + circuit breaker 規劃條目，防 client retry storm 把整個 cluster 拖下水
+- **C1 + Phase A 可靠性收網（2026-05-25 第六批）**：
+  - **C1 bulk insert**：`events/router.py create_event` 與 `seed.py` 增量 top-up 兩處改 Core `sa_insert(SafetyReport)` executemany，配 client-side `uuid.uuid4()`（executemany 不跑 Python-side default）。Fab14-wide 事件約 9k 個 INSERT 從個別 statement 壓成 1 個 round-trip
+  - **`load-test-handoff.md` Phase A**（同次 commit 已套上 GKE，現已驗證 rollout 成功）：
+    - `08-frontend.yaml` replicas 1→2、`09-frontend-hpa.yaml` minReplicas 1→2（解 frontend SPOF）
+    - `06-backend.yaml` 加 `terminationGracePeriodSeconds: 40` + preStop `sleep 5`（rolling deploy 期間 0 5xx）
+    - 四個 Deployment（backend / frontend / pgbouncer / cloudsql-proxy）加 `topologySpreadConstraints` on `topology.kubernetes.io/zone`（目前 zonal cluster 為 no-op，未來升 regional 自動生效）
+  - 觀察：HPA min=3，kubectl apply 的 `replicas: 1` 會短暫覆寫但 HPA 30 秒內補回；deployment 與 HPA 的 replicas 欄位 drift 是已知行為，不另處理
 - **C6 org snapshot 落地（2026-05-25 第五批）**：
   - `SafetyReport` 模型加 3 個欄位 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot`（plain UUID/VARCHAR、無 FK，避免被硬刪除主管帶倒）
   - 三條建立 placeholder 的程式碼路徑全部填 snapshot：`POST /api/events`、`seed.py` fresh-DB 路徑、`seed.py` 增量 top-up 路徑、以及測試的 `active_event` fixture
