@@ -24,7 +24,25 @@ spec:
           averageUtilization: 70
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 30
+      # Disaster scenarios produce sub-minute traffic spikes (~1000 logins
+      # in 60 seconds). Shrink the stabilization window and let HPA bring
+      # in many pods per evaluation cycle so cluster autoscaler also
+      # provisions nodes early.
+      stabilizationWindowSeconds: 0
+      policies:
+        # Up to 4 pods per 15s (4 + 8 + 16 ... = ~30 pods within ~75s).
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+        # Or double the replicas, whichever is more aggressive.
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+      selectPolicy: Max
     scaleDown:
       # Disaster traffic is spiky — scale down slowly to avoid flapping.
       stabilizationWindowSeconds: 180
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60

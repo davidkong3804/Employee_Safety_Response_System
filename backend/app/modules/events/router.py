@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import any_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import cache_invalidate_pattern
 from app.database import get_db
 from app.dependencies import get_optional_user, require_role
 from app.modules.events.models import Event
@@ -106,6 +107,8 @@ async def update_event(
 
     await db.flush()
     await db.refresh(event)
+    # Status / facility / etc. may have shifted what the dashboard shows.
+    await cache_invalidate_pattern(f"stats:event:{event_id}:*")
     return _event_to_response(event)
 
 
@@ -123,3 +126,4 @@ async def delete_event(
     await db.execute(delete(Reminder).where(Reminder.event_id == event_id))
     await db.execute(delete(SafetyReport).where(SafetyReport.event_id == event_id))
     await db.delete(event)
+    await cache_invalidate_pattern(f"stats:event:{event_id}:*")

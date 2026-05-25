@@ -46,9 +46,11 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 |---|------|------|------|
 | C1 | `events/router.py` `create_event` L80-82 | 逐筆 `db.add(report)` 迴圈建立 placeholder | 員工數上萬時應改 `insert().values([...])` 批次插入 |
 | C2 | `events/router.py` `update_event` L106 | 用 full `db.refresh(event)`，與 `create_event` 的 targeted refresh（`attribute_names=['created_at']`）不一致 | **需驗證**：若 asyncpg 讀回 `ARRAY` 欄位的問題仍在，編輯有廠區的事件會踩雷。建議統一改 targeted refresh |
-| C3 | `reports/router.py` `get_event_stats` / `stats/by-department` | 每次 30 秒輪詢都打未快取的彙總查詢，多位 manager 同時看會放大 DB 負載 | 用已部署的 Redis 做短 TTL 快取（5–10 秒）；參見 `docs/deployment.md` Known limitations |
+| C3 | ~~`reports/router.py` `get_event_stats` / `stats/by-department`~~ | ✅ **已修 (2026-05-25 第四批)**：`app/cache.py` 接 Redis，stats / by-department 兩端點 5 秒短 TTL 快取；`submit_report` / `update_event` / `delete_event` 都會 invalidate 該 event 的 stats 快取 pattern；`CACHE_DISABLED=1` env 給 test suite 跳過 | — |
 | C4 | `list_events` / `list_users` / `all-status` / `team-status` | 無分頁，一次回傳全部 | 大規模部署加 `limit`/`offset` 或 cursor 分頁 |
 | C5 | 全專案 | 無 DB migration 機制，schema 改動需重建表（Alembic 已安裝未用） | schema 要對 live data 演進時導入 Alembic |
+| C6 | `safety_reports` 表 | **規格缺口**：未保存事件發生當下的 org 快照（manager_id / department / facility at event time）→ 員工換主管 / 換部門後，**舊事件的「主管視角」會回溯改變** | 加 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot` 欄位，event 建立 placeholder 時填入；team-status / stats by-dept 用 snapshot 而非 user 的當前值；需 Alembic migration |
+| C7 | 全 API | 沒有 rate limiting / circuit breaker | 加 `slowapi` middleware（按 IP / 按使用者）防 client retry 風暴；對 DB 連線池可加 timeout-based circuit breaker 避免下游故障雪崩 |
 
 ---
 
@@ -58,8 +60,8 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 |---|------|------|------|------|
 | D1 | `k8s/02-secret.yaml` | 🟡 | ✅ **已修**：`02-secret.yaml` 移出版控（改 `02-secret.yaml.example` 範本 + 加入 `.gitignore`），真實 secret 不再進 git。**仍待辦**：① 把線上叢集的 `JWT_SECRET` 用 `openssl rand -hex 32` 換成真值；② 正式環境評估改用 GCP Secret Manager + Secrets Store CSI driver | 詳見 H 區與 `docs/deployment.md` 步驟 2 |
 | D2 | `k8s/10-ingress.yaml` | 🟡 | 尚未加 `kubernetes.io/ingress.allow-http: "false"` | Google-managed cert 變 ACTIVE 後手動補上，強制 HTTPS |
-| D3 | `k8s/03-postgres.yaml` | 🟡 | 單實例 Postgres，無 HA、無自動備份 | 正式環境改用 Cloud SQL for PostgreSQL |
-| D4 | `k8s/04-redis.yaml` | 🟢 | Redis 已部署但程式碼沒用到 | 接上 C3 的 dashboard 快取後才有意義 |
+| D3 | `k8s/03-postgres.yaml` | 🔴 | **唯一 SPOF**：單實例 Postgres，無 HA、無自動備份、failover 需 30-60s pod restart | 正式環境改用 **Cloud SQL for PostgreSQL Enterprise Plus**（regional HA、自動 failover、PITR backup）。遷移步驟：①GCP console 建 Cloud SQL instance；②開 Private IP 給 GKE VPC；③`02-secret.yaml` 的 `DATABASE_URL` 換成 Cloud SQL 連線字串；④`kubectl apply` 後既有的 in-cluster postgres StatefulSet 砍掉 |
+| D4 | ~~`k8s/04-redis.yaml`~~ | 🟢 | ✅ **已接上 (2026-05-25 第四批)**：C3 dashboard cache 使用中 | — |
 | D5 | `k8s/05-db-init-job.yaml` | 🟢 | image 寫死 `:v1`；Job spec 不可變 | 換 backend image / 改 schema 後，需手動 `kubectl delete job db-init && kubectl apply` |
 
 ---
@@ -146,6 +148,12 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
   - **(2) event loop 被 bcrypt 卡住**：`verify_password` 是同步 bcrypt（~250ms/次）在 async login 路由內呼叫，**鎖住整個 asyncio event loop**，單 pod 登入上限 ~4 req/s。改用 `asyncio.to_thread(bcrypt.checkpw, ...)` 把 CPU 工作丟去 thread pool；`test_auth_utils.py` 三個 verify 測試一併改 async
   - **(3) Job 再執行不拿新映像**：`k8s/05-db-init-job.yaml` image tag 寫死 `:v1`，即使重 build 後 `kubectl delete job && apply` 還是跑舊版 seed。改成 `:latest` + `imagePullPolicy: Always`，每次重跑都會拉最新 build
   - 配套：使用者需在 main merge 完、CI 把新 backend image 推到 Artifact Registry 後，跑 `kubectl -n safety-system delete job db-init && kubectl apply -f k8s/05-db-init-job.yaml`，新 seed 會補上 E0031–E15000（約 30 秒）並為既有 active event 自動 top-up placeholders
+- **災害高流量 / 可靠性對齊（2026-05-25 第四批）**：把三項評鑑準則（效能 / 擴充性 / 可靠性）逐項對照，補上可從程式碼改的部分、把需要基礎設施動作的列入規劃
+  - **(效能) C3 Redis dashboard cache**：新建 `backend/app/cache.py`（短 TTL JSON 快取 + scan-based pattern invalidation），`get_event_stats` / `stats/by-department` 兩端點先查快取、寫入時 invalidate；TTL 5 秒，30 個 manager 同時 poll 對 DB 的放大從 30× 變 ≤1×。`CACHE_DISABLED=1` env 給 test 用，避免無 Redis 環境拖測試
+  - **(效能) HPA scale-up 行為調快**：`07-backend-hpa.yaml` 把 `scaleUp.stabilizationWindowSeconds` 從 30 降到 0、加 policies：每 15s 最多加 4 pod 或翻倍（取大）。從 1 pod 衝到 30 pod 從 ~5 分鐘縮到 ~75 秒，配合 cluster autoscaler 提前加 node。scaleDown 仍保守（180s window + 10%/min）避免抖動
+  - **(擴充性) C6 規劃**：新增追蹤項——`safety_reports` 沒有保存「事件當下」的 org 快照，員工換主管後舊事件回溯改變；需 Alembic migration 加 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot` 欄位
+  - **(可靠性) D3 升級 🔴**：Postgres 單實例是目前唯一明確的 SPOF。正式環境必須遷 Cloud SQL Enterprise Plus（regional HA + auto failover + PITR backup）；improvements.md D3 row 補完遷移步驟
+  - **(可靠性) C7 規劃**：新增 rate limiting + circuit breaker 規劃條目，防 client retry storm 把整個 cluster 拖下水
 
 ---
 
@@ -155,9 +163,12 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 2. ~~🔴 D1~~ — ✅ secrets 已移出版控；正式上線前仍須換真值並評估 Secret Manager
 3. ~~🟡 A1–A6~~ — ✅ 全清
 4. ~~🟡 B1–B5~~ — ✅ 全清
-5. **🟡 E2** — 導入 Kustomize 解決 image tag drift
-6. **🟡 C3** — Redis 接上 dashboard 快取（壓測前做，效益明顯）
-7. **🟡 Prettier strict 化** — 跑一次 `pnpm exec prettier --write src/`，然後拿掉 CI 的 `continue-on-error`
-8. **🟡 C1 / C2 / C4 / C5** — 後端優化（bulk insert、targeted refresh 一致化、分頁、Alembic）
-9. **🟡 D2–D5** — k8s 部署面（HTTPS 強制、Cloud SQL HA、db-init Job 重跑流程）
-10. **🟢 F、G** — 監控與未來功能（F1/F2 已由隊友建好 Prometheus + Grafana + alerts），依專案時程排入
+5. ~~🟡 C3 + D4~~ — ✅ Redis dashboard cache 已接上
+6. **🔴 D3** — Cloud SQL HA 遷移（**唯一剩下的 SPOF**，正式上線前必做）
+7. **🟡 C6** — `safety_reports` 加 org snapshot 欄位 + Alembic migration（員工換主管後舊報表的正確性）
+8. **🟡 C7** — Rate limiting + circuit breaker（避免 retry storm cascading failure）
+9. **🟡 E2** — 導入 Kustomize 解決 image tag drift
+10. **🟡 Prettier strict 化** — 跑一次 `pnpm exec prettier --write src/`，然後拿掉 CI 的 `continue-on-error`
+11. **🟡 C1 / C2 / C4 / C5** — 後端優化（bulk insert、targeted refresh 一致化、分頁、Alembic）
+12. **🟡 D2 / D5** — k8s 部署面（HTTPS 強制、db-init Job 重跑流程）
+13. **🟢 F、G** — 監控與未來功能（F1/F2 已由隊友建好 Prometheus + Grafana + alerts），依專案時程排入
