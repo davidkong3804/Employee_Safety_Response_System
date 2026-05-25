@@ -116,6 +116,7 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 - 測試：後端 unit/integration、前端 Vitest、E2E Playwright、Locust 皆完整
 - 遠端分支清理（feature/testing、docs/handoff 已合併或刪除）
 - **D1（部分）**：`k8s/02-secret.yaml` 移出版控 — 改 `02-secret.yaml.example` 範本 + `.gitignore`，`docs/deployment.md`、`CLAUDE.md` 同步更新部署步驟
+- **前端測試覆蓋擴充**：補上 7 個測試檔（events / users / reports API client、FacilitySelector、Navbar、Login、ReportPage），補齊先前沒有 page-level 與 FacilitySelector 測試的缺口；新增 i18n keys 進 `vitest.setup.ts`
 
 ---
 
