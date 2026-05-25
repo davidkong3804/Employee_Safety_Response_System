@@ -18,6 +18,14 @@ test.describe('Admin Workflow – Event Lifecycle', () => {
   })
 
   test('create event → appears in list → can be closed → can be deleted', async ({ adminPage: page }) => {
+    // The UI guards destructive actions (close / delete event) with window.confirm.
+    // Playwright dismisses dialogs by default — auto-accept so the test reaches
+    // the actual API call. Register once before navigating; the handler stays
+    // active for the lifetime of the page.
+    page.on('dialog', async (dialog) => {
+      await dialog.accept()
+    })
+
     await page.goto('/admin/events')
     await page.waitForLoadState('networkidle')
 
