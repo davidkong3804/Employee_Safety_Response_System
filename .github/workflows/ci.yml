@@ -36,9 +36,15 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install ESLint + Prettier (no lockfile changes)
+      - name: Install ESLint + Prettier into frontend/node_modules
+        # `npm install --no-save --no-package-lock` populates node_modules
+        # without touching package.json or creating package-lock.json.
+        # Local install (not global) is required because eslint.config.js
+        # uses ESM `import` statements that resolve against the project's
+        # node_modules, not the global npm path.
+        working-directory: frontend
         run: |
-          npm install -g --no-save \
+          npm install --no-save --no-package-lock \
             eslint@^9 \
             @eslint/js@^9 \
             typescript-eslint@^8 \
@@ -46,12 +52,12 @@ jobs:
 
       - name: ESLint (frontend)
         working-directory: frontend
-        run: eslint src/
+        run: npx eslint src/
 
       - name: Prettier check (frontend)
         working-directory: frontend
         continue-on-error: true
-        run: prettier --check 'src/**/*.{ts,tsx,json,css}'
+        run: npx prettier --check 'src/**/*.{ts,tsx,json,css}'
         # `continue-on-error` is set because the codebase predates Prettier;
         # the team should run `prettier --write src/` once and then remove
         # this line so formatting is strictly enforced.
