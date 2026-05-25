@@ -3,7 +3,8 @@ import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from sqlalchemy import insert as sa_insert, select
+from sqlalchemy import insert as sa_insert
+from sqlalchemy import select
 
 from app.database import async_session
 from app.modules.events.models import Event

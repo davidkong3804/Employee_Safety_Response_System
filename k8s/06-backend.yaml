@@ -66,7 +66,11 @@ spec:
               app: backend
       containers:
         - name: backend
-          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:v1
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:latest
+          # Always pull so kubectl apply picks up the newest :latest digest —
+          # without this the kubelet reuses the cached image and silently runs
+          # the old binary after a CI push.
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           envFrom:

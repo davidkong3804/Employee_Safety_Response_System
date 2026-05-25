@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import String, cast, delete, insert as sa_insert, select
+from sqlalchemy import String, cast, delete, select
+from sqlalchemy import insert as sa_insert
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 

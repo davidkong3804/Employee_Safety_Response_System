@@ -48,9 +48,15 @@ spec:
               app: frontend
       containers:
         - name: frontend
-          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/frontend:v1
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/frontend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          # preStop gives NEG controller time to drain before SIGTERM.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
           livenessProbe:
             httpGet:
               path: /healthz
