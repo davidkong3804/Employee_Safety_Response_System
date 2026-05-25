@@ -29,7 +29,7 @@ describe('api client interceptors', () => {
   it('does not add Authorization header when no token in localStorage', async () => {
     const { default: client } = await import('../../api/client')
     const config: InternalAxiosRequestConfig = { headers: new AxiosHeaders() }
-    // @ts-expect-error
+    // @ts-expect-error axios.interceptors.handlers is internal — not in the public type definitions
     const reqInterceptor = client.interceptors.request.handlers[0]
     if (reqInterceptor?.fulfilled) {
       const result = await reqInterceptor.fulfilled(config)
@@ -49,7 +49,7 @@ describe('api client interceptors', () => {
     const { default: client } = await import('../../api/client')
     const error = { response: { status: 401 }, message: 'Unauthorized' }
 
-    // @ts-expect-error
+    // @ts-expect-error axios.interceptors.handlers is internal — not in the public type definitions
     const resInterceptor = client.interceptors.response.handlers[0]
     if (resInterceptor?.rejected) {
       try {
@@ -71,7 +71,7 @@ describe('api client interceptors', () => {
       config: { url: '/api/auth/login' },
       message: 'Unauthorized',
     }
-    // @ts-expect-error
+    // @ts-expect-error axios.interceptors.handlers is internal — not in the public type definitions
     const resInterceptor = client.interceptors.response.handlers[0]
     if (resInterceptor?.rejected) {
       try {
