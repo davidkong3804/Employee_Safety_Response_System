@@ -71,10 +71,15 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg text-xs text-gray-500">
-          <p className="font-medium mb-1">Demo Accounts (password: password123)</p>
-          <p>Admin: A001 | Manager: M001 | Employee: E001</p>
-        </div>
+        {/* Demo credentials shown only in dev / test builds. `import.meta.env.DEV`
+            is true under `vite` (dev server) and Vitest, false under `vite build`
+            (production), so the hint never reaches the production bundle. */}
+        {import.meta.env.DEV && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg text-xs text-gray-500">
+            <p className="font-medium mb-1">Demo Accounts (password: password123)</p>
+            <p>Admin: A001 | Manager: M001 | Employee: E001</p>
+          </div>
+        )}
       </div>
     </div>
   )

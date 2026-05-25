@@ -10,6 +10,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState<UserFull[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [filterRole, setFilterRole] = useState('')
   const [form, setForm] = useState({
     employee_id: '', name: '', email: '', password: 'password123',
@@ -24,6 +25,8 @@ export default function UserManagement() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
     try {
       await createUser(form)
       toast.success(t('user.createSuccess'))
@@ -31,13 +34,20 @@ export default function UserManagement() {
       load()
     } catch {
       toast.error(t('user.createFailed'))
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleDeactivate = async (id: string) => {
-    await deleteUser(id)
-    toast.success(t('user.deactivateSuccess'))
-    load()
+    if (!window.confirm(t('user.deactivateConfirm'))) return
+    try {
+      await deleteUser(id)
+      toast.success(t('user.deactivateSuccess'))
+      load()
+    } catch {
+      toast.error(t('user.deactivateFailed'))
+    }
   }
 
   if (loading) {
@@ -88,7 +98,13 @@ export default function UserManagement() {
                 <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder={t('user.phone')} className="px-3 py-2 border rounded-lg" />
                 <input value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder={t('login.password')} className="px-3 py-2 border rounded-lg" type="password" />
               </div>
-              <button type="submit" className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition">{t('user.create')}</button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? t('user.creating') : t('user.create')}
+              </button>
             </form>
           </div>
         </div>

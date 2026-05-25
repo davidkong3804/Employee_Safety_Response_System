@@ -11,6 +11,7 @@ export default function EventManagement() {
   const [events, setEvents] = useState<Event[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] as string[] })
 
   const load = () => {
@@ -21,6 +22,8 @@ export default function EventManagement() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
     try {
       const { facilities, ...rest } = form
       await createEvent({ ...rest, facility: facilities.length > 0 ? facilities : undefined })
@@ -30,19 +33,31 @@ export default function EventManagement() {
       load()
     } catch {
       toast.error(t('event.createFailed'))
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleClose = async (id: string) => {
-    await updateEvent(id, { status: 'closed' })
-    toast.success(t('event.closeSuccess'))
-    load()
+    if (!window.confirm(t('event.closeConfirm'))) return
+    try {
+      await updateEvent(id, { status: 'closed' })
+      toast.success(t('event.closeSuccess'))
+      load()
+    } catch {
+      toast.error(t('event.closeFailed'))
+    }
   }
 
   const handleDelete = async (id: string) => {
-    await deleteEvent(id)
-    toast.success(t('event.deleteSuccess'))
-    load()
+    if (!window.confirm(t('event.deleteConfirm'))) return
+    try {
+      await deleteEvent(id)
+      toast.success(t('event.deleteSuccess'))
+      load()
+    } catch {
+      toast.error(t('event.deleteFailed'))
+    }
   }
 
   const severityBadge = (s: string) => {
@@ -115,8 +130,12 @@ export default function EventManagement() {
                   onChange={facilities => setForm({ ...form, facilities })}
                 />
               </div>
-              <button type="submit" className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition">
-                {t('event.create')}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? t('event.creating') : t('event.create')}
               </button>
             </form>
           </div>

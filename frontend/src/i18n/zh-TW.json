@@ -53,7 +53,12 @@
     "createSuccess": "事件建立成功",
     "createFailed": "事件建立失敗",
     "closeSuccess": "事件已結束",
+    "closeFailed": "結束事件失敗",
+    "closeConfirm": "確定要結束這個事件嗎？員工將不再收到回報提醒。",
     "deleteSuccess": "事件已刪除",
+    "deleteFailed": "刪除事件失敗",
+    "deleteConfirm": "確定要永久刪除這個事件以及其所有回報紀錄？此操作無法復原。",
+    "creating": "建立中...",
     "facility": "受影響廠區",
     "allFacilities": "全廠區",
     "types": {
@@ -104,6 +109,9 @@
     "createSuccess": "使用者已新增",
     "createFailed": "新增使用者失敗",
     "deactivateSuccess": "使用者已停用",
+    "deactivateFailed": "停用使用者失敗",
+    "deactivateConfirm": "確定要停用這位使用者嗎？停用後將無法登入。",
+    "creating": "建立中...",
     "roles": {
       "admin": "管理員",
       "manager": "主管",

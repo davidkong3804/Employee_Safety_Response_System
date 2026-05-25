@@ -127,8 +127,8 @@ kubectl apply -f k8s/05-db-init-job.yaml
 
 ### Scaling
 
-- Backend HPA: 3–30 pods at 70% CPU (`k8s/07-backend-hpa.yaml`).
-- Frontend HPA: 2–10 pods (`k8s/09-frontend-hpa.yaml`).
+- Backend HPA: 1–30 pods at 70% CPU (`k8s/07-backend-hpa.yaml`).
+- Frontend HPA: 1–10 pods (`k8s/09-frontend-hpa.yaml`).
 - Manual: `kubectl -n safety-system scale deployment/backend --replicas=10`.
 - HPA needs the metrics server — built in on GKE.
 
@@ -149,13 +149,14 @@ Keep the cluster total under Postgres `max_connections`:
 
 ```
 maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)  <  max_connections
-30          x (3            + 2              )  =  150  <  200
+30          x (3            + 2              )  =  150  <  350
 ```
 
-`max_connections=200` is set on the Postgres StatefulSet; pool sizes are in
-`k8s/01-configmap.yaml`. If you raise `maxReplicas` substantially, put
-**pgbouncer** (transaction pooling) between the backend and Postgres rather
-than growing per-pod pools.
+`max_connections=350` is set on the Postgres StatefulSet (room for ~60 pods
+of headroom plus admin / probe connections); pool sizes are in
+`k8s/01-configmap.yaml`. If you raise `maxReplicas` substantially beyond
+60, put **pgbouncer** (transaction pooling) between the backend and Postgres
+rather than growing per-pod pools.
 
 ## Known limitations / next steps
 

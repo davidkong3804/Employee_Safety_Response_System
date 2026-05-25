@@ -53,7 +53,12 @@
     "createSuccess": "Event created",
     "createFailed": "Failed to create event",
     "closeSuccess": "Event closed",
+    "closeFailed": "Failed to close event",
+    "closeConfirm": "Close this event? Employees will no longer be prompted to report.",
     "deleteSuccess": "Event deleted",
+    "deleteFailed": "Failed to delete event",
+    "deleteConfirm": "Permanently delete this event and all its reports? This cannot be undone.",
+    "creating": "Creating...",
     "facility": "Affected Facilities",
     "allFacilities": "All Facilities",
     "types": {
@@ -104,6 +109,9 @@
     "createSuccess": "User created",
     "createFailed": "Failed to create user",
     "deactivateSuccess": "User deactivated",
+    "deactivateFailed": "Failed to deactivate user",
+    "deactivateConfirm": "Deactivate this user? They will no longer be able to log in.",
+    "creating": "Creating...",
     "roles": {
       "admin": "Admin",
       "manager": "Manager",
