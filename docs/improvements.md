@@ -49,7 +49,7 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 | C3 | ~~`reports/router.py` `get_event_stats` / `stats/by-department`~~ | ✅ **已修 (2026-05-25 第四批)**：`app/cache.py` 接 Redis，stats / by-department 兩端點 5 秒短 TTL 快取；`submit_report` / `update_event` / `delete_event` 都會 invalidate 該 event 的 stats 快取 pattern；`CACHE_DISABLED=1` env 給 test suite 跳過 | — |
 | C4 | `list_events` / `list_users` / `all-status` / `team-status` | 無分頁，一次回傳全部 | 大規模部署加 `limit`/`offset` 或 cursor 分頁 |
 | C5 | 全專案 | 無 DB migration 機制，schema 改動需重建表（Alembic 已安裝未用） | schema 要對 live data 演進時導入 Alembic |
-| C6 | `safety_reports` 表 | **規格缺口**：未保存事件發生當下的 org 快照（manager_id / department / facility at event time）→ 員工換主管 / 換部門後，**舊事件的「主管視角」會回溯改變** | 加 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot` 欄位，event 建立 placeholder 時填入；team-status / stats by-dept 用 snapshot 而非 user 的當前值；需 Alembic migration |
+| C6 | ~~`safety_reports` 表~~ | ✅ **已修 (2026-05-25 第五批)**：加 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot` 三欄；events `POST` / seed fresh / seed top-up 三條路徑都填 snapshot；`team-status` 改 filter `manager_id_snapshot`、`stats/by-department` 改 group by `department_snapshot`、`all-status` 的 facility/department filter 改 snapshot；`init_db.apply_pending_migrations()` 對既有 DB 跑 `ALTER TABLE ADD COLUMN IF NOT EXISTS` + 從 user 表 backfill 歷史資料 | — |
 | C7 | 全 API | 沒有 rate limiting / circuit breaker | 加 `slowapi` middleware（按 IP / 按使用者）防 client retry 風暴；對 DB 連線池可加 timeout-based circuit breaker 避免下游故障雪崩 |
 
 ---
@@ -154,6 +154,13 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
   - **(擴充性) C6 規劃**：新增追蹤項——`safety_reports` 沒有保存「事件當下」的 org 快照，員工換主管後舊事件回溯改變；需 Alembic migration 加 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot` 欄位
   - **(可靠性) D3 升級 🔴**：Postgres 單實例是目前唯一明確的 SPOF。正式環境必須遷 Cloud SQL Enterprise Plus（regional HA + auto failover + PITR backup）；improvements.md D3 row 補完遷移步驟
   - **(可靠性) C7 規劃**：新增 rate limiting + circuit breaker 規劃條目，防 client retry storm 把整個 cluster 拖下水
+- **C6 org snapshot 落地（2026-05-25 第五批）**：
+  - `SafetyReport` 模型加 3 個欄位 `manager_id_snapshot` / `department_snapshot` / `facility_snapshot`（plain UUID/VARCHAR、無 FK，避免被硬刪除主管帶倒）
+  - 三條建立 placeholder 的程式碼路徑全部填 snapshot：`POST /api/events`、`seed.py` fresh-DB 路徑、`seed.py` 增量 top-up 路徑、以及測試的 `active_event` fixture
+  - 三個讀取端點換 snapshot 來源：`team-status` 改 filter `manager_id_snapshot`、`stats/by-department` 改 group by `department_snapshot`、`all-status` 的 facility/department 改 snapshot
+  - 既有叢集遷移：`init_db.apply_pending_migrations()` 跑 `ALTER TABLE safety_reports ADD COLUMN IF NOT EXISTS ...`，並從 user 表把 NULL 行 backfill 成現有 org 值（best-effort 歷史值，比未來會持續偏移好）
+  - 新增 3 個 integration test 驗證行為：員工換主管後、換部門後、換廠區後，歷史事件的 team-status / by-dept / facility filter 不變
+  - 副作用：`stats/by-department` 與 `all-status` 不再 JOIN users 表，查詢更快
 
 ---
 
@@ -165,7 +172,7 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 4. ~~🟡 B1–B5~~ — ✅ 全清
 5. ~~🟡 C3 + D4~~ — ✅ Redis dashboard cache 已接上
 6. **🔴 D3** — Cloud SQL HA 遷移（**唯一剩下的 SPOF**，正式上線前必做）
-7. **🟡 C6** — `safety_reports` 加 org snapshot 欄位 + Alembic migration（員工換主管後舊報表的正確性）
+7. ~~🟡 C6~~ — ✅ org snapshot 三欄已落地、查詢端點全切過去、歷史資料 backfill 完成
 8. **🟡 C7** — Rate limiting + circuit breaker（避免 retry storm cascading failure）
 9. **🟡 E2** — 導入 Kustomize 解決 image tag drift
 10. **🟡 Prettier strict 化** — 跑一次 `pnpm exec prettier --write src/`，然後拿掉 CI 的 `continue-on-error`

@@ -1,3 +1,7 @@
+# DEPRECATED (3-B) — will be replaced by Cloud SQL HA (regional persistent disk
+# + standby replica with automatic failover). Keep this file until Cloud SQL is
+# active and all pods have reconnected via k8s/13-cloudsql-proxy.yaml.
+#
 # Single-instance PostgreSQL for a self-contained demo deployment.
 # For real production on GKE prefer Cloud SQL for PostgreSQL (managed backups,
 # HA, automatic failover) and point DATABASE_URL at it instead.

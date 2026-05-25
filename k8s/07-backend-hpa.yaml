@@ -8,20 +8,22 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: backend
-  minReplicas: 1
-  # Stress-test ceiling. Real headroom depends on the project's
-  # CPUS_ALL_REGIONS quota and the cluster-autoscaler max nodes; with
-  # the current 2-4 e2-medium pool (~3.4 GB usable mem/node) we can fit
-  # ~40 backend pods @ 192Mi req each. Bump to 50 after quota increase
-  # raises the cross-region CPU cap.
-  maxReplicas: 30
+  # minReplicas=3: pre-warm 3 pods so disaster traffic isn't funnelled
+  # through a single pod during the first HPA evaluation cycle (~25s).
+  minReplicas: 3
+  # maxReplicas=60: 60 pods × 3 connections = 180 total DB connections,
+  # within postgres max_connections=350 until PgBouncer is deployed.
+  # Raise further after PgBouncer is in place (pool_size can then go to 10+5).
+  maxReplicas: 60
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70
+          # Lower threshold (60%) triggers scale-up earlier, leaving headroom
+          # for burst I/O that doesn't show up as CPU until connections saturate.
+          averageUtilization: 60
   behavior:
     scaleUp:
       # Disaster scenarios produce sub-minute traffic spikes (~1000 logins

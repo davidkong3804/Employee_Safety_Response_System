@@ -40,6 +40,9 @@ erDiagram
         text message "optional detail"
         timestamp reported_at
         timestamp created_at
+        uuid manager_id_snapshot "manager_id at event creation; immune to later transfers"
+        varchar(100) department_snapshot "department at event creation"
+        varchar(50) facility_snapshot "facility at event creation"
     }
 
     REMINDERS {
@@ -79,6 +82,7 @@ Core reporting table with one record per user per event.
 - **Unique constraint**: `(event_id, user_id)` — each user can only have one report per event
 - **Status lifecycle**: `NULL` (unreported) → `safe` or `need_help`
 - **Indexes**: `(event_id, status)` for dashboard aggregation queries
+- **Org snapshot** (`manager_id_snapshot`, `department_snapshot`, `facility_snapshot`): captured at placeholder-creation time. Subsequent transfers of the underlying user (different manager, department, or facility) do **not** alter these values, so manager team-status / by-department stats / facility filters stay stable on historical events. Plain UUID/VARCHAR (no FK) so the snapshot survives even after hard-deletion of the referenced manager.
 
 ### reminders
 Tracks notification attempts for unreported employees.

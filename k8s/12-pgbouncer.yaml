@@ -1,0 +1,105 @@
+# PgBouncer connection pooler — transaction mode.
+#
+# Sits between backend pods and PostgreSQL, multiplexing up to 1000 client
+# connections into ~50 real server connections. This allows the HPA to scale
+# backend pods beyond the DB max_connections ceiling without risk.
+#
+# After deploying this file, update k8s/02-secret.yaml.example:
+#   DATABASE_URL → postgresql+asyncpg://app:<pw>@pgbouncer:5432/safety_response
+# and raise the pool in k8s/01-configmap.yaml:
+#   DB_POOL_SIZE=10, DB_MAX_OVERFLOW=5
+#
+# bitnami/pgbouncer auto-generates userlist.txt from POSTGRESQL_PASSWORD,
+# so no separate secret hashing step is needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: safety-system
+data:
+  PGBOUNCER_POOL_MODE: "transaction"
+  PGBOUNCER_MAX_CLIENT_CONN: "1000"
+  PGBOUNCER_DEFAULT_POOL_SIZE: "50"
+  PGBOUNCER_MIN_POOL_SIZE: "5"
+  PGBOUNCER_RESERVE_POOL_SIZE: "10"
+  PGBOUNCER_RESERVE_POOL_TIMEOUT: "5"
+  PGBOUNCER_SERVER_LIFETIME: "3600"
+  PGBOUNCER_SERVER_IDLE_TIMEOUT: "600"
+  # Suppress per-connection noise; log pool errors only.
+  PGBOUNCER_LOG_CONNECTIONS: "0"
+  PGBOUNCER_LOG_DISCONNECTIONS: "0"
+  PGBOUNCER_LOG_POOLER_ERRORS: "1"
+  # Stage 3-B: upstream switched from in-cluster postgres to cloudsql-proxy,
+  # which fronts the Cloud SQL HA instance via Workload Identity + private IP.
+  POSTGRESQL_HOST: "cloudsql-proxy"
+  POSTGRESQL_PORT: "5432"
+  POSTGRESQL_DATABASE: "safety_response"
+  POSTGRESQL_USERNAME: "app"
+  # Make the client-facing alias match the backend dbname so clients can
+  # connect with "safety_response" (otherwise Bitnami defaults the alias to "postgres").
+  PGBOUNCER_DATABASE: "safety_response"
+---
+# Headless ClusterIP so backend pods resolve "pgbouncer" to one of the two
+# bouncer pods via kube-proxy round-robin.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  namespace: safety-system
+spec:
+  selector:
+    app: pgbouncer
+  ports:
+    - port: 5432
+      targetPort: 6432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: safety-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+    spec:
+      # Disable K8s service env injection — the Service is also named "pgbouncer",
+      # so K8s would inject PGBOUNCER_PORT=tcp://<ip>:5432 which collides with the
+      # Bitnami entrypoint's PGBOUNCER_PORT integer check.
+      enableServiceLinks: false
+      containers:
+        - name: pgbouncer
+          image: bitnamilegacy/pgbouncer:1.23.1
+          envFrom:
+            - configMapRef:
+                name: pgbouncer-config
+          env:
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 6432
+          readinessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi

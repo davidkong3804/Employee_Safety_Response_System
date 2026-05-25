@@ -186,16 +186,29 @@ async def seed_data():
                         select(SafetyReport.user_id).where(SafetyReport.event_id == ev.id)
                     )).all()
                 }
-                # Target user set — active users, filtered by event facility
-                users_q = select(User.id).where(User.is_active.is_(True))
+                # Target users — fetch with org context so we can snapshot
+                # them onto each new placeholder (C6: keeps historical
+                # manager/department/facility queries stable).
+                users_q = select(
+                    User.id, User.manager_id, User.department, User.facility,
+                ).where(User.is_active.is_(True))
                 if ev.facility:
                     users_q = users_q.where(User.facility.in_(ev.facility))
-                target_uids = {row[0] for row in (await session.execute(users_q)).all()}
+                target_rows = (await session.execute(users_q)).all()
+                target_by_uid = {row[0]: row for row in target_rows}
+                target_uids = set(target_by_uid.keys())
 
                 missing = target_uids - existing_uids
                 if missing:
                     session.add_all([
-                        SafetyReport(event_id=ev.id, user_id=uid) for uid in missing
+                        SafetyReport(
+                            event_id=ev.id,
+                            user_id=uid,
+                            manager_id_snapshot=target_by_uid[uid][1],
+                            department_snapshot=target_by_uid[uid][2],
+                            facility_snapshot=target_by_uid[uid][3],
+                        )
+                        for uid in missing
                     ])
                     topped_up += len(missing)
 
@@ -240,7 +253,14 @@ async def seed_data():
         # Event 1 (active): partial reporting — some safe, some need help, many unreported
         random.seed(42)
         for user in all_users:
-            report = SafetyReport(event_id=event1.id, user_id=user.id)
+            # Snapshot org context onto every placeholder (C6).
+            report = SafetyReport(
+                event_id=event1.id,
+                user_id=user.id,
+                manager_id_snapshot=user.manager_id,
+                department_snapshot=user.department,
+                facility_snapshot=user.facility,
+            )
             roll = random.random()
             if roll < 0.40:
                 report.status = "safe"
@@ -257,7 +277,13 @@ async def seed_data():
 
         # Event 2 (closed): almost everyone reported
         for user in all_users:
-            report = SafetyReport(event_id=event2.id, user_id=user.id)
+            report = SafetyReport(
+                event_id=event2.id,
+                user_id=user.id,
+                manager_id_snapshot=user.manager_id,
+                department_snapshot=user.department,
+                facility_snapshot=user.facility,
+            )
             roll = random.random()
             if roll < 0.90:
                 report.status = "safe"

@@ -193,9 +193,16 @@ async def active_event(db_session, admin_user, manager_user, employee_user) -> E
     db_session.add(event)
     await db_session.flush()
 
-    # Manually create placeholder reports (mimicking create_event business logic)
+    # Manually create placeholder reports (mimicking create_event business logic
+    # — including the org snapshot fields introduced in C6 / 2026-05-25).
     for user in [admin_user, manager_user, employee_user]:
-        report = SafetyReport(event_id=event.id, user_id=user.id)
+        report = SafetyReport(
+            event_id=event.id,
+            user_id=user.id,
+            manager_id_snapshot=user.manager_id,
+            department_snapshot=user.department,
+            facility_snapshot=user.facility,
+        )
         db_session.add(report)
     await db_session.flush()
     return event

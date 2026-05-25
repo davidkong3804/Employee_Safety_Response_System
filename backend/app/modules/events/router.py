@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import any_, delete, select
+from sqlalchemy import String, cast, delete, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import cache_invalidate_pattern
+from app.cache import cache_get_json, cache_invalidate_pattern, cache_set_json
 from app.database import get_db
 from app.dependencies import get_optional_user, require_role
 from app.modules.events.models import Event
@@ -15,6 +16,8 @@ from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/events", tags=["events"])
+
+_EVENTS_LIST_TTL = 10  # seconds — short enough to stay fresh, long enough to absorb burst reads
 
 
 def _event_to_response(event: Event) -> EventResponse:
@@ -37,13 +40,28 @@ async def list_events(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ):
+    # Employee results are facility-scoped; admin/manager see everything.
+    # Use separate cache keys so facility-filtered lists don't pollute the
+    # unfiltered view (and vice-versa).
+    if current_user and current_user.role == "employee":
+        cache_key = f"events:list:facility:{current_user.facility}"
+    else:
+        cache_key = "events:list:all"
+
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return [EventResponse(**item) for item in cached]
+
     query = select(Event).order_by(Event.status.asc(), Event.created_at.desc())
     if current_user and current_user.role == "employee":
         query = query.where(
-            (Event.facility.is_(None)) | (current_user.facility == any_(Event.facility))
+            (Event.facility.is_(None))
+            | Event.facility.contains(cast([current_user.facility], ARRAY(String(50))))
         )
     result = await db.execute(query)
-    return [_event_to_response(e) for e in result.scalars().all()]
+    events = [_event_to_response(e) for e in result.scalars().all()]
+    await cache_set_json(cache_key, [e.model_dump() for e in events], ttl_seconds=_EVENTS_LIST_TTL)
+    return events
 
 
 @router.get("/{event_id}", response_model=EventResponse)
@@ -81,9 +99,19 @@ async def create_event(
         users_query = users_query.where(User.facility.in_(event.facility))
     users_result = await db.execute(users_query)
     for user in users_result.scalars().all():
-        report = SafetyReport(event_id=event.id, user_id=user.id)
+        # Snapshot the user's current org so the historical view stays
+        # stable even if the user later changes manager / department /
+        # facility. See SafetyReport docstring for the full rationale.
+        report = SafetyReport(
+            event_id=event.id,
+            user_id=user.id,
+            manager_id_snapshot=user.manager_id,
+            department_snapshot=user.department,
+            facility_snapshot=user.facility,
+        )
         db.add(report)
 
+    await cache_invalidate_pattern("events:list:*")
     return _event_to_response(event)
 
 
@@ -109,6 +137,7 @@ async def update_event(
     await db.refresh(event)
     # Status / facility / etc. may have shifted what the dashboard shows.
     await cache_invalidate_pattern(f"stats:event:{event_id}:*")
+    await cache_invalidate_pattern("events:list:*")
     return _event_to_response(event)
 
 
@@ -127,3 +156,4 @@ async def delete_event(
     await db.execute(delete(SafetyReport).where(SafetyReport.event_id == event_id))
     await db.delete(event)
     await cache_invalidate_pattern(f"stats:event:{event_id}:*")
+    await cache_invalidate_pattern("events:list:*")

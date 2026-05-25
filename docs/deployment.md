@@ -127,7 +127,7 @@ kubectl apply -f k8s/05-db-init-job.yaml
 
 ### Scaling
 
-- Backend HPA: 1–30 pods at 70% CPU (`k8s/07-backend-hpa.yaml`).
+- Backend HPA: 3–60 pods at 60% CPU (`k8s/07-backend-hpa.yaml`).
 - Frontend HPA: 1–10 pods (`k8s/09-frontend-hpa.yaml`).
 - Manual: `kubectl -n safety-system scale deployment/backend --replicas=10`.
 - HPA needs the metrics server — built in on GKE.
@@ -144,27 +144,134 @@ GKE derives each load-balancer health check from the pods' readiness probes.
 
 ## Connection-pool capacity
 
-Each backend pod opens up to `DB_POOL_SIZE + DB_MAX_OVERFLOW` connections.
-Keep the cluster total under Postgres `max_connections`:
+PgBouncer (`k8s/12-pgbouncer.yaml`) sits between backend pods and PostgreSQL
+in transaction pooling mode, multiplexing many client connections into ~50
+real server connections:
+
+```
+60 backend pods  x  (DB_POOL_SIZE=10 + DB_MAX_OVERFLOW=5)  =  900 client conns
+                                                              ↓ PgBouncer
+                                                           ≤ 50 real DB conns
+```
+
+Pool sizes are in `k8s/01-configmap.yaml`. Without PgBouncer the formula is:
 
 ```
 maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)  <  max_connections
-30          x (3            + 2              )  =  150  <  350
 ```
 
-`max_connections=350` is set on the Postgres StatefulSet (room for ~60 pods
-of headroom plus admin / probe connections); pool sizes are in
-`k8s/01-configmap.yaml`. If you raise `maxReplicas` substantially beyond
-60, put **pgbouncer** (transaction pooling) between the backend and Postgres
-rather than growing per-pod pools.
+## Stage 3: Production infrastructure (GKE)
+
+### 3-A: PgBouncer (connection pooler)
+
+Deploy PgBouncer before raising `maxReplicas` beyond ~110 pods (350 / 3):
+
+```bash
+kubectl apply -f k8s/12-pgbouncer.yaml
+kubectl -n safety-system rollout status deployment/pgbouncer
+```
+
+Then update `k8s/02-secret.yaml` to use the PgBouncer URL and re-apply:
+
+```bash
+# In k8s/02-secret.yaml, uncomment Option B:
+# DATABASE_URL: "postgresql+asyncpg://app:<pw>@pgbouncer:5432/safety_response"
+kubectl apply -f k8s/02-secret.yaml
+kubectl -n safety-system rollout restart deployment/backend
+```
+
+Verify: `kubectl -n safety-system exec deploy/pgbouncer -- pgbouncer -v`
+
+### 3-C: Cloud Memorystore for Redis (HA)
+
+```bash
+# Provision Standard Tier instance (has replica + automatic failover)
+gcloud redis instances create safety-redis \
+  --region=REGION \
+  --tier=standard \
+  --size=1 \
+  --redis-version=redis_7_0
+
+# Get private IP
+gcloud redis instances describe safety-redis --region=REGION --format='get(host)'
+```
+
+Update `k8s/01-configmap.yaml`:
+
+```yaml
+REDIS_URL: "redis://MEMORYSTORE_PRIVATE_IP:6379"
+```
+
+Then re-apply the ConfigMap and restart backends. Once Memorystore is live,
+`k8s/04-redis.yaml` can be removed.
+
+### 3-B: Cloud SQL HA (high-availability database)
+
+```bash
+# 1. Create a PostgreSQL 16 instance with HA (regional persistent disk + standby)
+gcloud sql instances create safety-postgres \
+  --database-version=POSTGRES_16 \
+  --tier=db-g1-small \
+  --region=REGION \
+  --availability-type=regional \
+  --storage-auto-increase
+
+# 2. Set the app user password (must match POSTGRES_PASSWORD in the secret)
+gcloud sql users set-password app \
+  --instance=safety-postgres \
+  --password=REPLACE_WITH_A_STRONG_DB_PASSWORD
+
+# 3. Create the database
+gcloud sql databases create safety_response --instance=safety-postgres
+
+# 4. Create a GCP service account for Cloud SQL Auth Proxy
+gcloud iam service-accounts create safety-backend \
+  --display-name="Safety System Backend"
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:safety-backend@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/cloudsql.client"
+
+# 5. Bind GCP SA to the Kubernetes SA (Workload Identity)
+gcloud iam service-accounts add-iam-policy-binding \
+  safety-backend@PROJECT_ID.iam.gserviceaccount.com \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="serviceAccount:PROJECT_ID.svc.id.goog[safety-system/backend-sa]"
+```
+
+Get the instance connection name:
+
+```bash
+gcloud sql instances describe safety-postgres --format='get(connectionName)'
+# → PROJECT_ID:REGION:safety-postgres
+```
+
+Update `k8s/02-secret.yaml` — uncomment Option C and add the connection name:
+
+```yaml
+DATABASE_URL: "postgresql+asyncpg://app:<pw>@127.0.0.1:5432/safety_response"
+CLOUDSQL_INSTANCE_CONNECTION_NAME: "PROJECT_ID:REGION:safety-postgres"
+```
+
+Apply the Auth Proxy sidecar patch and restart:
+
+```bash
+kubectl apply -f k8s/13-cloudsql-proxy.yaml
+kubectl apply -f k8s/02-secret.yaml
+kubectl -n safety-system rollout restart deployment/backend
+```
+
+Run the db-init Job once against Cloud SQL to create the schema:
+
+```bash
+kubectl -n safety-system delete job db-init --ignore-not-found
+kubectl apply -f k8s/05-db-init-job.yaml
+kubectl -n safety-system wait --for=condition=complete job/db-init --timeout=180s
+```
+
+Once all pods are connected to Cloud SQL, `k8s/03-postgres.yaml` can be removed.
 
 ## Known limitations / next steps
 
-- **Redis is provisioned but unused** by application code. Wire it up to cache
-  the dashboard aggregation endpoints (`/api/events/{id}/stats*`) — at scale,
-  the 30-second dashboard polling hammers those uncached queries.
-- **In-cluster PostgreSQL** has no HA or automated backups. Use Cloud SQL for
-  real production.
 - **No schema migrations.** Schema changes currently require recreating
   tables via the init job. Adopt Alembic when the schema needs to evolve
   against live data.

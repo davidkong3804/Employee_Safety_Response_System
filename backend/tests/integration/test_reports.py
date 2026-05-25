@@ -249,3 +249,116 @@ class TestAllStatus:
             f"/api/events/{active_event.id}/all-status", headers=manager_headers
         )
         assert r.status_code == 403
+
+
+@pytest.mark.integration
+class TestOrgSnapshotIsolation:
+    """C6: an org change *after* an event is created must not retroactively
+    alter that event's report views — manager team-status, dept stats and
+    facility filters all read from the snapshot, never the user's current
+    org context.
+    """
+
+    async def test_team_status_stable_when_employee_changes_manager(
+        self,
+        client,
+        manager_headers,
+        manager_user,
+        employee_user,
+        admin_user,
+        db_session,
+        active_event,
+    ):
+        # Before the org change: the employee shows up under the manager.
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status", headers=manager_headers
+        )
+        assert r.status_code == 200
+        before_ids = {rep["user_id"] for rep in r.json()}
+        assert str(employee_user.id) in before_ids
+
+        # Now reassign the employee away from this manager (e.g. transferred
+        # to the admin — any other manager-or-admin id would do).
+        employee_user.manager_id = admin_user.id
+        await db_session.flush()
+
+        # The historical event must STILL show the employee under the
+        # original manager because manager_id_snapshot was frozen at
+        # placeholder-creation time.
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status", headers=manager_headers
+        )
+        assert r.status_code == 200
+        after_ids = {rep["user_id"] for rep in r.json()}
+        assert before_ids == after_ids
+        assert str(employee_user.id) in after_ids
+
+    async def test_dept_stats_stable_when_user_changes_department(
+        self,
+        client,
+        manager_headers,
+        admin_user,
+        manager_user,
+        employee_user,
+        db_session,
+        active_event,
+    ):
+        # Capture the baseline department distribution before any change.
+        before = await client.get(
+            f"/api/events/{active_event.id}/stats/by-department",
+            headers=manager_headers,
+        )
+        assert before.status_code == 200
+        before_depts = {d["department"]: d["total"] for d in before.json()}
+
+        # Move every test user into a fictional department.
+        admin_user.department = "MovedDept"
+        manager_user.department = "MovedDept"
+        employee_user.department = "MovedDept"
+        await db_session.flush()
+
+        # The historical event's dept stats should still match the snapshot,
+        # not the new "MovedDept" assignment.
+        after = await client.get(
+            f"/api/events/{active_event.id}/stats/by-department",
+            headers=manager_headers,
+        )
+        assert after.status_code == 200
+        after_depts = {d["department"]: d["total"] for d in after.json()}
+        assert after_depts == before_depts
+        assert "MovedDept" not in after_depts
+
+    async def test_all_status_facility_filter_uses_snapshot(
+        self,
+        client,
+        admin_headers,
+        employee_user,
+        db_session,
+        active_event,
+    ):
+        # active_event fixture pins facility=["TestFab"] and every test user
+        # is on TestFab, so the filtered list should match the unfiltered one.
+        r = await client.get(
+            f"/api/events/{active_event.id}/all-status?facility=TestFab",
+            headers=admin_headers,
+        )
+        before_count = len(r.json())
+        assert before_count == 3
+
+        # Move the employee to a different facility post-event.
+        employee_user.facility = "OtherFab"
+        await db_session.flush()
+
+        # Snapshot-based filter must still return the same 3 records.
+        r = await client.get(
+            f"/api/events/{active_event.id}/all-status?facility=TestFab",
+            headers=admin_headers,
+        )
+        assert len(r.json()) == before_count
+        # And a filter on the new facility returns nothing — the snapshot
+        # was TestFab, not OtherFab.
+        r = await client.get(
+            f"/api/events/{active_event.id}/all-status?facility=OtherFab",
+            headers=admin_headers,
+        )
+        assert r.json() == []

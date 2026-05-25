@@ -1,3 +1,7 @@
+# DEPRECATED (3-C) — will be replaced by Cloud Memorystore for Redis (Standard
+# Tier with replica). Keep this file until Memorystore is provisioned and
+# REDIS_URL in k8s/01-configmap.yaml is updated to the Memorystore private IP.
+#
 # Redis is provisioned because it is part of the declared stack. It is not yet
 # used by application code — wire it up for caching the dashboard aggregation
 # endpoints (/api/events/{id}/stats*) before it earns its keep.
