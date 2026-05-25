@@ -58,7 +58,7 @@ jobs:
           curl -sf "$HOST/health" || (echo "Backend not healthy!" && exit 1)
 
       - name: Install Locust
-        run: pip install locust==2.34.0
+        run: pip install "locust==2.34.0" "zope.event" "zope.interface"
 
       - name: Run load test
         working-directory: tests/performance
