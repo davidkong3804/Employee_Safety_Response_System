@@ -39,6 +39,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests legitimately use star imports / unused fixtures
 "tests/**/*.py" = ["F401", "F811"]
+# conftest.py intentionally sets DATABASE_URL env BEFORE importing app —
+# `app.config` reads env vars at import time, so the ordering is required
+# and conflicts with E402 (module-level import not at top) and isort.
+"tests/conftest.py" = ["E402", "I001", "F401", "F811"]
 # __init__.py re-exports
 "**/__init__.py" = ["F401"]
 

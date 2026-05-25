@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_optional_user, require_role
 from app.modules.events.models import Event
-from app.modules.notifications.models import Reminder
 from app.modules.events.schemas import EventCreate, EventResponse, EventUpdate
+from app.modules.notifications.models import Reminder
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
 
@@ -72,8 +72,10 @@ async def create_event(
     await db.flush()
     await db.refresh(event, attribute_names=['created_at'])
 
-    # Create safety_report placeholders for active employees in the affected facility
-    users_query = select(User).where(User.is_active == True)
+    # Create safety_report placeholders for active employees in the affected facility.
+    # `.is_(True)` is the SQLAlchemy 2.0 canonical way to filter on a boolean column —
+    # equivalent to `== True` but Ruff-clean (avoids E712).
+    users_query = select(User).where(User.is_active.is_(True))
     if event.facility:
         users_query = users_query.where(User.facility.in_(event.facility))
     users_result = await db.execute(users_query)

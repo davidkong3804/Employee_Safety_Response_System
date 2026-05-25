@@ -37,7 +37,9 @@ class TestSubmitReport:
 
     async def test_no_placeholder_returns_404(self, client, admin_headers, employee_headers, employee_user, db_session):
         from uuid import UUID as PyUUID
+
         from sqlalchemy import delete as sa_delete
+
         from app.modules.reports.models import SafetyReport
 
         r_event = await client.post(
