@@ -143,11 +143,13 @@ async def get_stats_by_department(
     if cached is not None:
         return cached
 
+    # Group by the snapshot, not the user's current department. Otherwise an
+    # employee transferring between departments would retroactively move
+    # their count out of the historical event's tally. (C6)
     result = await db.execute(
-        select(User.department, SafetyReport.status, func.count(SafetyReport.id))
-        .join(User, SafetyReport.user_id == User.id)
+        select(SafetyReport.department_snapshot, SafetyReport.status, func.count(SafetyReport.id))
         .where(SafetyReport.event_id == event_id)
-        .group_by(User.department, SafetyReport.status)
+        .group_by(SafetyReport.department_snapshot, SafetyReport.status)
     )
     dept_data: dict[str, dict] = {}
     for dept, status, count in result.all():
@@ -177,15 +179,15 @@ async def get_team_status(
             select(SafetyReport).where(SafetyReport.event_id == event_id)
         )
     else:
-        subordinate_ids = await db.execute(
-            select(User.id).where(User.manager_id == current_user.id)
-        )
-        sub_ids = [row[0] for row in subordinate_ids.all()]
-        sub_ids.append(current_user.id)
+        # Filter on manager_id_snapshot, NOT user.manager_id today, so a
+        # past event's "my team" view stays stable across org changes.
+        # Also include the manager's own placeholder so they see themselves.
+        # (C6)
         result = await db.execute(
             select(SafetyReport).where(
                 SafetyReport.event_id == event_id,
-                SafetyReport.user_id.in_(sub_ids),
+                (SafetyReport.manager_id_snapshot == current_user.id)
+                | (SafetyReport.user_id == current_user.id),
             )
         )
     return [_report_to_response(r) for r in result.scalars().all()]
@@ -199,12 +201,13 @@ async def get_all_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
+    # Filter on snapshot fields so a user who has since moved facility /
+    # department doesn't unexpectedly drop in or out of a historical event's
+    # filter. (C6)
     query = select(SafetyReport).where(SafetyReport.event_id == event_id)
-    if facility or department:
-        query = query.join(User, SafetyReport.user_id == User.id)
-        if facility:
-            query = query.where(User.facility == facility)
-        if department:
-            query = query.where(User.department == department)
+    if facility:
+        query = query.where(SafetyReport.facility_snapshot == facility)
+    if department:
+        query = query.where(SafetyReport.department_snapshot == department)
     result = await db.execute(query)
     return [_report_to_response(r) for r in result.scalars().all()]

@@ -81,7 +81,16 @@ async def create_event(
         users_query = users_query.where(User.facility.in_(event.facility))
     users_result = await db.execute(users_query)
     for user in users_result.scalars().all():
-        report = SafetyReport(event_id=event.id, user_id=user.id)
+        # Snapshot the user's current org so the historical view stays
+        # stable even if the user later changes manager / department /
+        # facility. See SafetyReport docstring for the full rationale.
+        report = SafetyReport(
+            event_id=event.id,
+            user_id=user.id,
+            manager_id_snapshot=user.manager_id,
+            department_snapshot=user.department,
+            facility_snapshot=user.facility,
+        )
         db.add(report)
 
     return _event_to_response(event)
