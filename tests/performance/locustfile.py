@@ -22,11 +22,11 @@ Acceptance thresholds (check in the HTML report):
   - Throughput > 100 RPS for read endpoints
 """
 
-import itertools
 import random
 from typing import Optional
 
-from locust import HttpUser, between, task
+import requests
+from locust import HttpUser, between, events, task
 
 # ---------------------------------------------------------------------------
 # Seed credentials (password123 for all)
@@ -35,19 +35,47 @@ ADMIN_CREDS = {"employee_id": "A001", "password": "password123"}
 MANAGER_CREDS = [
     {"employee_id": f"M{i:03d}", "password": "password123"} for i in range(1, 6)
 ]
-EMPLOYEE_CREDS = (
-    [{"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)]
-    + [{"employee_id": f"E{i:04d}", "password": "password123"} for i in range(31, 1001)]
-)
-
-# Round-robin iterators so each virtual user gets a unique slot (cycles if
-# more virtual users than real accounts, but avoids hot-spot collisions).
-_employee_cycle = itertools.cycle(EMPLOYEE_CREDS)
-_manager_cycle  = itertools.cycle(MANAGER_CREDS)
-_admin_cycle    = itertools.cycle([ADMIN_CREDS])
+EMPLOYEE_CREDS = [
+    {"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)
+]
 
 # Shared cache – populated once when an AdminUser starts up
-_active_event_ids = []
+_active_event_ids: list[str] = []
+
+# Token pool – populated once at test_start by warmup_tokens(), keyed by
+# employee_id. Lets every user reuse a pre-fetched JWT instead of paying the
+# bcrypt login cost on every on_start, so the load test measures the real
+# throughput of the business endpoints rather than the bcrypt bottleneck.
+_token_pool: dict[str, str] = {}
+
+
+@events.test_start.add_listener
+def warmup_tokens(environment, **kwargs) -> None:
+    """Pre-fetch a JWT for every seed account before users spawn.
+
+    bcrypt(rounds=12) makes POST /api/auth/login CPU-bound (~250ms each).
+    Logging in hundreds of users simultaneously saturates backend CPU and
+    pollutes the latency metrics of every other endpoint. Fetching all tokens
+    once, up-front, isolates the bcrypt cost from the business endpoints so the
+    report reflects how stats / report / events actually scale.
+    """
+    host = (environment.host or "").rstrip("/")
+    if not host:
+        print("[warmup] no host configured – skipping token pre-fetch")
+        return
+    all_creds = EMPLOYEE_CREDS + MANAGER_CREDS + [ADMIN_CREDS]
+    ok = 0
+    for creds in all_creds:
+        try:
+            r = requests.post(
+                f"{host}/api/auth/login", json=creds, timeout=30
+            )
+            if r.status_code == 200:
+                _token_pool[creds["employee_id"]] = r.json()["access_token"]
+                ok += 1
+        except requests.RequestException:
+            pass
+    print(f"[warmup] pre-fetched {ok}/{len(all_creds)} tokens from {host}")
 
 
 class _BaseUser(HttpUser):
@@ -59,6 +87,13 @@ class _BaseUser(HttpUser):
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
 
     def _login(self, creds: dict) -> None:
+        # Prefer the token pre-fetched at test_start (see warmup_tokens) so the
+        # bcrypt login cost does not pollute the metrics of other endpoints.
+        cached = _token_pool.get(creds["employee_id"])
+        if cached:
+            self._token = cached
+            return
+        # Fallback: live login (e.g. interactive web UI, or warmup skipped).
         with self.client.post(
             "/api/auth/login",
             json=creds,
@@ -70,10 +105,6 @@ class _BaseUser(HttpUser):
             else:
                 r.failure(f"Login failed {r.status_code}")
 
-    def _refresh_token(self, creds: dict) -> None:
-        """Re-login if token seems stale (called on 401)."""
-        self._login(creds)
-
 
 # ---------------------------------------------------------------------------
 # Employee (weight 30)
@@ -82,8 +113,7 @@ class EmployeeUser(_BaseUser):
     weight = 30
 
     def on_start(self) -> None:
-        self._creds = next(_employee_cycle)
-        self._login(self._creds)
+        self._login(random.choice(EMPLOYEE_CREDS))
 
     @task(5)
     def list_events(self) -> None:
@@ -94,29 +124,23 @@ class EmployeeUser(_BaseUser):
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        with self.client.post(
+        self.client.post(
             f"/api/events/{event_id}/report",
             json={"status": random.choice(["safe", "need_help"])},
             headers=self._headers(),
             name="POST /api/events/{id}/report",
-            catch_response=True,
-        ) as r:
-            if r.status_code == 401:
-                self._refresh_token(self._creds)
+        )
 
     @task(2)
     def get_my_report(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        with self.client.get(
+        self.client.get(
             f"/api/events/{event_id}/my-report",
             headers=self._headers(),
             name="GET /api/events/{id}/my-report",
-            catch_response=True,
-        ) as r:
-            if r.status_code == 401:
-                self._refresh_token(self._creds)
+        )
 
     @task(1)
     def health_check(self) -> None:
@@ -130,50 +154,40 @@ class ManagerUser(_BaseUser):
     weight = 5
 
     def on_start(self) -> None:
-        self._creds = next(_manager_cycle)
-        self._login(self._creds)
+        self._login(random.choice(MANAGER_CREDS))
 
     @task(3)
     def get_team_status(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        with self.client.get(
+        self.client.get(
             f"/api/events/{event_id}/team-status",
             headers=self._headers(),
             name="GET /api/events/{id}/team-status",
-            catch_response=True,
-        ) as r:
-            if r.status_code == 401:
-                self._refresh_token(self._creds)
+        )
 
     @task(2)
     def get_stats(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        with self.client.get(
+        self.client.get(
             f"/api/events/{event_id}/stats",
             headers=self._headers(),
             name="GET /api/events/{id}/stats",
-            catch_response=True,
-        ) as r:
-            if r.status_code == 401:
-                self._refresh_token(self._creds)
+        )
 
     @task(1)
     def trigger_reminders(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        with self.client.post(
+        self.client.post(
             f"/api/events/{event_id}/remind",
             headers=self._headers(),
             name="POST /api/events/{id}/remind",
-            catch_response=True,
-        ) as r:
-            if r.status_code == 401:
-                self._refresh_token(self._creds)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -183,8 +197,7 @@ class AdminUser(_BaseUser):
     weight = 3
 
     def on_start(self) -> None:
-        self._creds = next(_admin_cycle)
-        self._login(self._creds)
+        self._login(ADMIN_CREDS)
         # Populate shared cache with active event IDs
         r = self.client.get("/api/events", headers=self._headers())
         if r.status_code == 200:
