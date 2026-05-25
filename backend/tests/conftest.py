@@ -8,6 +8,13 @@ _test_db_url = os.environ.get(
 )
 os.environ["DATABASE_URL"] = _test_db_url
 
+# Disable the Redis cache for the test suite — there's no Redis service
+# in CI's test job, and waiting for socket_connect_timeout on every cached
+# endpoint call would add ~2s × dozens-of-tests of dead time. The cache
+# module's CACHE_DISABLED check returns early, leaving the existing
+# DB-driven assertions intact.
+os.environ.setdefault("CACHE_DISABLED", "1")
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

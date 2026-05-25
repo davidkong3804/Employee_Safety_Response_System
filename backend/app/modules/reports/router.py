@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import cache_get_json, cache_invalidate_pattern, cache_set_json
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.modules.reports.models import SafetyReport
@@ -17,6 +18,19 @@ from app.modules.reports.schemas import (
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/events", tags=["reports"])
+
+
+def _stats_cache_key(event_id: UUID) -> str:
+    return f"stats:event:{event_id}:overall"
+
+
+def _dept_stats_cache_key(event_id: UUID) -> str:
+    return f"stats:event:{event_id}:by-department"
+
+
+def _event_cache_pattern(event_id: UUID) -> str:
+    """All cache keys related to one event — used to invalidate after writes."""
+    return f"stats:event:{event_id}:*"
 
 
 def _report_to_response(report: SafetyReport) -> ReportResponse:
@@ -60,6 +74,8 @@ async def submit_report(
     report.reported_at = datetime.now(timezone.utc)
     await db.flush()
     await db.refresh(report)
+    # Stats just changed → blow away any cached aggregates for this event.
+    await cache_invalidate_pattern(_event_cache_pattern(event_id))
     return _report_to_response(report)
 
 
@@ -87,6 +103,14 @@ async def get_event_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
+    # Cache check first — Manager Dashboard polls every 30s, so many
+    # managers viewing the same event amplify this query N times in a
+    # second. Cache hit returns immediately without hitting Postgres.
+    cache_key = _stats_cache_key(event_id)
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return EventStats(**cached)
+
     result = await db.execute(
         select(SafetyReport.status, func.count(SafetyReport.id))
         .where(SafetyReport.event_id == event_id)
@@ -97,13 +121,15 @@ async def get_event_stats(
     need_help = counts.get("need_help", 0)
     unreported = counts.get(None, 0)
     total = safe + need_help + unreported
-    return EventStats(
+    stats = EventStats(
         total=total,
         safe=safe,
         need_help=need_help,
         unreported=unreported,
         report_rate=round((safe + need_help) / total * 100, 1) if total > 0 else 0,
     )
+    await cache_set_json(cache_key, stats.model_dump())
+    return stats
 
 
 @router.get("/{event_id}/stats/by-department", response_model=list[DepartmentStats])
@@ -112,6 +138,11 @@ async def get_stats_by_department(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
+    cache_key = _dept_stats_cache_key(event_id)
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return cached
+
     result = await db.execute(
         select(User.department, SafetyReport.status, func.count(SafetyReport.id))
         .join(User, SafetyReport.user_id == User.id)
@@ -130,7 +161,9 @@ async def get_stats_by_department(
         else:
             dept_data[dept_name]["unreported"] += count
         dept_data[dept_name]["total"] += count
-    return list(dept_data.values())
+    payload = list(dept_data.values())
+    await cache_set_json(cache_key, payload)
+    return payload
 
 
 @router.get("/{event_id}/team-status", response_model=list[ReportResponse])
