@@ -30,14 +30,21 @@ from locust import HttpUser, between, task
 
 # ---------------------------------------------------------------------------
 # Seed credentials (password123 for all)
+#
+# Capacity must match backend/app/seed.py LOAD_TEST_MAX_EMPLOYEES — currently
+# 15000. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
+# are auto-generated test accounts with 4-or-more-digit IDs.
 # ---------------------------------------------------------------------------
+LOAD_TEST_MAX_EMPLOYEES = 15000
+
 ADMIN_CREDS = {"employee_id": "A001", "password": "password123"}
 MANAGER_CREDS = [
     {"employee_id": f"M{i:03d}", "password": "password123"} for i in range(1, 6)
 ]
 EMPLOYEE_CREDS = (
     [{"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)]
-    + [{"employee_id": f"E{i:04d}", "password": "password123"} for i in range(31, 1001)]
+    + [{"employee_id": f"E{i:04d}", "password": "password123"}
+       for i in range(31, LOAD_TEST_MAX_EMPLOYEES + 1)]
 )
 
 # Round-robin iterators so each virtual user gets a unique slot (cycles if

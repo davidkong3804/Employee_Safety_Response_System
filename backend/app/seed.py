@@ -11,6 +11,13 @@ from app.modules.users.models import User
 
 DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
+# Capacity planning: load tests run up to 15000 concurrent virtual users.
+# The first 30 employees (E001–E030) are hand-crafted demo data; the rest
+# are auto-generated test accounts (E0031–E15000). Bump this number if
+# stress tests need more capacity — both seed.py and locustfile.py should
+# stay in sync.
+LOAD_TEST_MAX_EMPLOYEES = 15000
+
 
 async def seed_data():
     """Idempotent demo seed.
@@ -137,10 +144,10 @@ async def seed_data():
             added_user_count += 1
         await session.flush()
 
-        # ---- extra load-test employees E0031–E1000 ---------------------
+        # ---- extra load-test employees E0031 – E{LOAD_TEST_MAX_EMPLOYEES} -
         depts    = ["製造一部", "製造二部", "製造一部", "設備部", "品質部"]
         facilits = ["Fab14", "Fab14", "Fab18", "Fab14", "Fab18"]
-        for i in range(31, 1001):
+        for i in range(31, LOAD_TEST_MAX_EMPLOYEES + 1):
             eid = f"E{i:04d}"
             if eid in existing_emp_ids:
                 continue
@@ -161,12 +168,42 @@ async def seed_data():
 
         # ---- short-circuit if events already exist ---------------------
         if events_already_exist:
+            # Top up placeholder reports for any active event that's missing
+            # entries for the newly-added users. Without this step a load test
+            # against existing events would 404 on submit_report for E0031+.
+            # Mirrors the production POST /api/events logic: filter by event
+            # facility (NULL = all) and only include is_active users.
+            topped_up = 0
+            active_events = (await session.execute(
+                select(Event).where(Event.status == "active")
+            )).scalars().all()
+
+            for ev in active_events:
+                # Existing user_ids already covered for this event
+                existing_uids = {
+                    row[0]
+                    for row in (await session.execute(
+                        select(SafetyReport.user_id).where(SafetyReport.event_id == ev.id)
+                    )).all()
+                }
+                # Target user set — active users, filtered by event facility
+                users_q = select(User.id).where(User.is_active.is_(True))
+                if ev.facility:
+                    users_q = users_q.where(User.facility.in_(ev.facility))
+                target_uids = {row[0] for row in (await session.execute(users_q)).all()}
+
+                missing = target_uids - existing_uids
+                if missing:
+                    session.add_all([
+                        SafetyReport(event_id=ev.id, user_id=uid) for uid in missing
+                    ])
+                    topped_up += len(missing)
+
             await session.commit()
             print(
-                f"✅ Seed: ensured users ({added_user_count} added). "
-                "Events already exist — skipping demo event/report creation. "
-                "(New users have no placeholder reports for old events; create a "
-                "fresh event via the API and every active user gets one.)"
+                f"✅ Seed: ensured users ({added_user_count} added); "
+                f"topped up {topped_up} placeholder reports across "
+                f"{len(active_events)} active event(s). Demo events not re-created."
             )
             return
 
