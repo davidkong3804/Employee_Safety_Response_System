@@ -57,10 +57,12 @@ jobs:
           echo "Checking $HOST/health ..."
           curl -sf "$HOST/health" || (echo "Backend not healthy!" && exit 1)
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Install Locust
-        run: |
-          pip install --upgrade pip setuptools
-          pip install locust
+        run: pip install locust==2.32.3
 
       - name: Run load test
         working-directory: tests/performance
