@@ -1,0 +1,286 @@
+# Grafana — dashboard for the in-cluster Prometheus (14-prometheus.yaml).
+#
+# Access (no Ingress exposure — keep it internal):
+#   kubectl -n safety-system port-forward svc/grafana 3001:3000
+#   open http://localhost:3001  (admin/admin — change on first login)
+#
+# Datasource + dashboard are provisioned from ConfigMaps so the
+# deployment is fully declarative (no clicking through the UI to set
+# things up). PVC keeps user preferences / new dashboards across pod
+# restarts; the provisioned dashboard is always re-read from the
+# ConfigMap on every pod start (provider config has allowUiUpdates=false).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: safety-system
+data:
+  prometheus.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: safety-system
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: Safety Response System
+        type: file
+        # Don't let UI edits silently override the version-controlled JSON.
+        allowUiUpdates: false
+        # Re-load JSON files every 30s — lets you `kubectl apply` an
+        # updated ConfigMap and see it without bouncing the pod.
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+# Dashboard JSON — kept in sync with
+# monitoring/grafana/provisioning/dashboards/safety-response.json.
+# If you edit one, edit both (the docker-compose path keeps local dev parity).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-safety-response
+  namespace: safety-system
+data:
+  safety-response.json: |
+    {
+      "panels": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "id": 1,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\"}[1m]))",
+              "legendFormat": "RPS"
+            }
+          ],
+          "title": "Request Per Second",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "id": 2,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=\"4xx\"}[1m]))",
+              "legendFormat": "4xx"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=\"5xx\"}[1m]))",
+              "legendFormat": "5xx"
+            }
+          ],
+          "title": "Error Rate (4xx + 5xx)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "id": 3,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
+              "legendFormat": "p95"
+            }
+          ],
+          "title": "Response Time p95 (ms)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "id": 4,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\"}[1m])) by (handler)",
+              "legendFormat": "{{handler}}"
+            }
+          ],
+          "title": "RPS by Endpoint",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "id": 5,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
+              "legendFormat": "p50"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "histogram_quantile(0.90, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
+              "legendFormat": "p90"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
+              "legendFormat": "p99"
+            }
+          ],
+          "title": "Response Time p50 / p90 / p99",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "id": 6,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "count(up{job=\"safety-response-backend\"} == 1)",
+              "legendFormat": "healthy pods"
+            }
+          ],
+          "title": "Healthy Backend Pods",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "id": 7,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\"}[1m])) by (pod)",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "title": "RPS per Pod (load distribution)",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "5s",
+      "schemaVersion": 38,
+      "tags": ["fastapi"],
+      "title": "Safety Response System",
+      "uid": "safety-response"
+    }
+---
+# Small (1Gi) PVC for Grafana state — saved dashboards, user prefs,
+# alerting silences. The provisioned dashboard JSON is always re-read
+# from the ConfigMap, so this PVC is only for user-created content.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: safety-system
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: safety-system
+  labels:
+    app: grafana
+spec:
+  type: ClusterIP
+  selector:
+    app: grafana
+  ports:
+    - name: web
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: safety-system
+spec:
+  replicas: 1
+  strategy:
+    # Recreate: ReadWriteOnce PVC can only attach to one pod at a time.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+      annotations:
+        # Bump on ConfigMap edits if you want to force a pod restart
+        # (otherwise Grafana picks up dashboard JSON within updateIntervalSeconds=30).
+        configmap-version: "1"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472    # grafana — matches the grafana/grafana image
+        runAsGroup: 472
+        fsGroup: 472      # so the PVC is writable
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.3.2
+          ports:
+            - name: web
+              containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              # NOTE: default password for first login only — Grafana
+              # nags you to change it. For real deployments, move this
+              # into k8s/02-secret.yaml.
+              value: admin
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              # Read-only anonymous view of dashboards — convenient for
+              # demos / sharing the URL with classmates. Flip to false
+              # before exposing publicly.
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Viewer
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 50m,  memory: 128Mi }
+            limits:   { cpu: 250m, memory: 256Mi }
+          volumeMounts:
+            - { name: data,        mountPath: /var/lib/grafana }
+            - { name: datasources, mountPath: /etc/grafana/provisioning/datasources }
+            - { name: provider,    mountPath: /etc/grafana/provisioning/dashboards }
+            - { name: dashboards,  mountPath: /var/lib/grafana/dashboards }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-data
+        - name: datasources
+          configMap: { name: grafana-datasources }
+        - name: provider
+          configMap: { name: grafana-dashboards-provider }
+        - name: dashboards
+          configMap: { name: grafana-dashboard-safety-response }
