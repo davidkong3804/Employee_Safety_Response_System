@@ -260,6 +260,26 @@ PGBOUNCER_PORT=tcp://10.x.x.x:5432
 ### F. Cloud SQL ENTERPRISE_PLUS 不支援自訂 tier
 建 instance 時要明確指定 `--edition=ENTERPRISE`，否則用 ENTERPRISE_PLUS 預設，`db-custom-2-7680` 不被接受。
 
+### G. PgBouncer transaction mode + asyncpg + SQLAlchemy 的 prepared statement 衝突
+PgBouncer 在 transaction mode 把多個 client 連線多路復用到較少的 server connection。asyncpg 預設會 implicitly prepare 每個 SQL 為 named statement (`__asyncpg_stmt_N__`)，SQLAlchemy 的 asyncpg dialect 又額外維護自己的 prepared statement cache。兩個 client 共享同條 server conn 時，名字就會撞：
+
+```
+asyncpg.exceptions.DuplicatePreparedStatementError:
+prepared statement "__asyncpg_stmt_4__" already exists
+```
+
+症狀很狡猾：readiness probe 間歇 200/503，平常看不出來，壓力一上來才整片失敗。修法是**兩層 cache 都關掉**：
+
+```python
+engine = create_async_engine(
+    url,
+    prepared_statement_cache_size=0,     # SQLAlchemy asyncpg dialect cache
+    connect_args={"statement_cache_size": 0},  # asyncpg driver cache
+)
+```
+
+僅設 `statement_cache_size=0` **不夠** — SQLAlchemy dialect 那層 cache 預設 100。
+
 ---
 
 ## 連線數運算（驗證 PgBouncer 真的有用）
