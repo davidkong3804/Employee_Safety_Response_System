@@ -1,0 +1,92 @@
+name: Load Test on GKE
+
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Number of concurrent users"
+        required: true
+        default: "10000"
+      spawn_rate:
+        description: "Spawn rate (users/sec)"
+        required: true
+        default: "200"
+      run_time:
+        description: "Test duration (e.g. 120s)"
+        required: true
+        default: "120s"
+
+jobs:
+  load-test:
+    name: Locust Load Test → GKE
+    runs-on: ubuntu-latest
+
+    env:
+      REGISTRY: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER }}
+          location: ${{ secrets.GKE_REGION }}
+
+      - name: Get Ingress external IP
+        id: ingress
+        run: |
+          IP=$(kubectl -n safety-system get ingress \
+            -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+          if [ -z "$IP" ]; then
+            # fallback: use backend LoadBalancer service IP
+            IP=$(kubectl -n safety-system get svc backend \
+              -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+          fi
+          echo "host=http://$IP" >> $GITHUB_OUTPUT
+          echo "Target: http://$IP"
+
+      - name: Check backend health
+        run: |
+          HOST=${{ steps.ingress.outputs.host }}
+          echo "Checking $HOST/health ..."
+          curl -sf "$HOST/health" || (echo "Backend not healthy!" && exit 1)
+
+      - name: Install Locust
+        run: pip install locust==2.34.0
+
+      - name: Run load test
+        working-directory: tests/performance
+        run: |
+          mkdir -p reports
+          locust -f locustfile.py --headless \
+            --host ${{ steps.ingress.outputs.host }} \
+            --users ${{ github.event.inputs.users }} \
+            --spawn-rate ${{ github.event.inputs.spawn_rate }} \
+            --run-time ${{ github.event.inputs.run_time }} \
+            --html reports/gke_load_${{ github.event.inputs.users }}users.html \
+            --csv reports/gke_load_${{ github.event.inputs.users }}users
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: locust-report-${{ github.event.inputs.users }}-users
+          path: tests/performance/reports/
+          retention-days: 30
+
+      - name: Print summary
+        if: always()
+        run: |
+          CSV=tests/performance/reports/gke_load_${{ github.event.inputs.users }}users_stats.csv
+          if [ -f "$CSV" ]; then
+            echo "### Load Test Results (${{ github.event.inputs.users }} users)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat "$CSV" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
