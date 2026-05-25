@@ -113,3 +113,170 @@ async def cache_invalidate_pattern(pattern: str) -> None:
             await client.delete(key)
     except Exception as exc:
         log.debug("cache_invalidate_pattern(%s) failed: %s", pattern, exc)
+
+
+# ---------------------------------------------------------------------------
+# Write buffer — absorbs concurrent safety-report submissions under spike load.
+#
+# Instead of each employee request hammering PostgreSQL with a synchronous
+# UPDATE, we write to a Redis Hash and let the background drainer
+# (background.py) batch-flush to the DB every 2 seconds.
+#
+# Key schema:
+#   buf:report:{event_id}:{user_id}          Hash  (per-user entry, TTL 60 s)
+#   buf:events_with_pending:{event_id}       Set   (directory of pending user_ids, TTL 60 s)
+# ---------------------------------------------------------------------------
+
+_BUF_TTL = 60  # seconds — well beyond the 2 s drain interval
+
+
+async def buffer_report(
+    event_id: str,
+    user_id: str,
+    status: str,
+    message: str,
+    reported_at: str,
+) -> bool:
+    """Write one safety-report to the Redis write buffer.
+
+    Returns True on success, False when Redis is unavailable or disabled
+    (caller should fall back to a direct DB write).
+    """
+    if _DISABLED:
+        return False
+    try:
+        import time
+
+        client = _get_client()
+        buf_key = f"buf:report:{event_id}:{user_id}"
+        dir_key = f"buf:events_with_pending:{event_id}"
+        pipe = client.pipeline()
+        pipe.hset(
+            buf_key,
+            mapping={
+                "status": status,
+                "message": message,
+                "reported_at": reported_at,
+                "buffered_at": str(time.time()),
+            },
+        )
+        pipe.expire(buf_key, _BUF_TTL)
+        pipe.sadd(dir_key, user_id)
+        pipe.expire(dir_key, _BUF_TTL)
+        await pipe.execute()
+        return True
+    except Exception as exc:
+        log.debug("buffer_report(%s/%s) failed: %s", event_id, user_id, exc)
+        return False
+
+
+async def drain_event_buffer(event_id: str) -> int:
+    """Drain all buffered reports for *event_id* into PostgreSQL.
+
+    Returns the number of rows written (0 if nothing was pending or on error).
+    Called only by the background drainer task — not on the request path.
+    """
+    if _DISABLED:
+        return 0
+    try:
+        client = _get_client()
+        dir_key = f"buf:events_with_pending:{event_id}"
+
+        # Take ownership of the directory atomically-ish:
+        # delete the dir key first so new incoming reports go into a fresh Set,
+        # then process the snapshot we just captured.
+        user_ids = await client.smembers(dir_key)
+        if not user_ids:
+            return 0
+        await client.delete(dir_key)
+
+        # Batch-read all per-user Hashes.
+        user_id_list = list(user_ids)
+        pipe = client.pipeline()
+        for uid in user_id_list:
+            pipe.hgetall(f"buf:report:{event_id}:{uid}")
+        raw_results = await pipe.execute()
+
+        # Delete the buf keys we just read.
+        del_pipe = client.pipeline()
+        for uid in user_id_list:
+            del_pipe.delete(f"buf:report:{event_id}:{uid}")
+        await del_pipe.execute()
+
+        records = [
+            {
+                "user_id": uid,
+                "status": hdata["status"],
+                "message": hdata.get("message") or None,
+                "reported_at": hdata.get("reported_at"),
+            }
+            for uid, hdata in zip(user_id_list, raw_results)
+            if isinstance(hdata, dict) and hdata.get("status")
+        ]
+
+        if not records:
+            return 0
+
+        count = await _batch_update_db(event_id, records)
+        # Invalidate stats cache once per drain cycle, not once per report.
+        await cache_invalidate_pattern(f"stats:event:{event_id}:*")
+        return count
+
+    except Exception as exc:
+        log.warning("drain_event_buffer(%s) failed: %s", event_id, exc)
+        return 0
+
+
+async def _batch_update_db(event_id: str, records: list[dict]) -> int:
+    """Batch-UPDATE safety_reports using a single SQL VALUES list.
+
+    One DB round-trip and one WAL write group for up to thousands of rows,
+    vastly cheaper than N individual UPDATEs.
+
+    asyncpg type notes
+    ------------------
+    * UUID: pass as str + CAST in VALUES — asyncpg accepts str with explicit CAST.
+    * report_status enum: pass as str + CAST in VALUES — same approach.
+    * timestamptz: asyncpg requires a Python datetime object (not a str), even
+      with CAST. We parse the ISO-8601 string stored in Redis before binding.
+    * CAST() function syntax throughout — ":name::type" confuses asyncpg's
+      parameter parser (the second colon looks like a new param name).
+    """
+    from datetime import datetime
+
+    from sqlalchemy import text
+
+    from app.database import async_session
+
+    values_parts: list[str] = []
+    params: dict = {"event_id": event_id}
+
+    for i, rec in enumerate(records):
+        values_parts.append(
+            f"(CAST(:uid_{i} AS uuid), CAST(:st_{i} AS report_status), :msg_{i}, CAST(:rat_{i} AS timestamptz))"
+        )
+        params[f"uid_{i}"] = rec["user_id"]
+        params[f"st_{i}"] = rec["status"]
+        params[f"msg_{i}"] = rec["message"]
+        # asyncpg requires a Python datetime (not str) when CAST(...AS timestamptz)
+        # is present — the CAST tells asyncpg to expect a datetime, and we must
+        # actually supply one or it rejects the binding.
+        params[f"rat_{i}"] = datetime.fromisoformat(rec["reported_at"])
+
+    sql = text(
+        f"""
+        UPDATE safety_reports
+        SET    status      = v.status,
+               message     = v.message,
+               reported_at = v.reported_at
+        FROM   (VALUES {", ".join(values_parts)})
+               AS v(user_id, status, message, reported_at)
+        WHERE  safety_reports.event_id = CAST(:event_id AS uuid)
+          AND  safety_reports.user_id  = v.user_id
+        """
+    )
+
+    async with async_session() as session:
+        result = await session.execute(sql, params)
+        await session.commit()
+        return result.rowcount or len(records)

@@ -16,11 +16,11 @@ data:
   # Connection pool per backend pod. Keep
   #   maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)
   # below Postgres max_connections (set to 350 in 03-postgres.yaml).
-  # Backend HPA is 1-30 → 30 x (3 + 2) = 150 connections at peak,
-  # well under 350 (room for admin / probe / db-init connections too).
-  # Headroom supports raising maxReplicas to ~60 before pgbouncer
-  # is needed for transaction-level pooling.
-  DB_POOL_SIZE: "3"
-  DB_MAX_OVERFLOW: "2"
+  # HPA is now 3-60; 60 x (2 + 1) = 180 connections at peak —
+  # within the 350 limit until PgBouncer is deployed.
+  # After PgBouncer (k8s/12-pgbouncer.yaml), raise to DB_POOL_SIZE=10,
+  # DB_MAX_OVERFLOW=5 since PgBouncer multiplexes to ~50 real DB connections.
+  DB_POOL_SIZE: "2"
+  DB_MAX_OVERFLOW: "1"
   DB_POOL_TIMEOUT: "30"
   DB_POOL_RECYCLE: "1800"

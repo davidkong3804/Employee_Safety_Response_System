@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 
+from app.background import start_drainer, stop_drainer
 from app.config import settings
 from app.database import engine
 from app.modules.auth.router import router as auth_router
@@ -19,8 +20,9 @@ async def lifespan(app: FastAPI):
     # Schema creation and demo seeding are NOT done here — running them on
     # every pod startup races across replicas. They run once via the
     # init job / `python -m app.init_db` (see docs/deployment.md).
+    await start_drainer()
     yield
-
+    await stop_drainer()
     await engine.dispose()
 
 

@@ -37,7 +37,10 @@ async def trigger_reminders(
                 Reminder.user_id == report.user_id,
             )
         )
-        reminder = existing.scalar_one_or_none()
+        # Use first() instead of scalar_one_or_none() to tolerate the race
+        # where two concurrent /remind calls both insert for the same user
+        # before either sees the other's row (no UNIQUE constraint yet).
+        reminder = existing.scalars().first()
         if reminder:
             reminder.reminder_count += 1
             reminder.last_reminded = datetime.now(timezone.utc)
