@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -15,11 +16,24 @@ from app.modules.users.models import User
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+async def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Run bcrypt verification in the default thread pool so the asyncio
+    event loop stays responsive. bcrypt.checkpw is deliberately CPU-heavy
+    (~100-300ms per call); a synchronous call inside an async route
+    serialises every other request on the same worker behind it, which is
+    why high-concurrency login tests bottlenecked to ~4 req/s per pod.
+    Offloading via asyncio.to_thread lets the worker handle other I/O
+    while bcrypt runs on a thread."""
+    return await asyncio.to_thread(
+        bcrypt.checkpw,
+        plain_password.encode("utf-8"),
+        hashed_password.encode("utf-8"),
+    )
 
 
 def hash_password(password: str) -> str:
+    """Synchronous on purpose — only called during user creation / seeding,
+    not on the login hot path, so event-loop blocking is acceptable."""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
@@ -33,7 +47,7 @@ def create_access_token(user_id: str) -> str:
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.employee_id == data.employee_id))
     user = result.scalar_one_or_none()
-    if not user or not user.is_active or not verify_password(data.password, user.password_hash):
+    if not user or not user.is_active or not await verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect employee ID or password",

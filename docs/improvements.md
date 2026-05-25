@@ -137,6 +137,11 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
     - 送出按鈕 `disabled` + "Creating..." 顯示，避免連點重複建立
     - Login 頁 demo 帳密 div 用 `import.meta.env.DEV` 包起來，production build 不會打包
   - 🔴 → 🟢 **E1**：使用者完成 GitHub Secrets 設定（`GCP_SA_KEY` / `GKE_CLUSTER` / `GKE_REGION`），CI/CD pipeline 從此全啟用
+- **GKE login load-test 三連修（2026-05-25 第三批）**：診斷 Locust 對 GKE 跑壓測時登入大量失敗，三個根因一次解決
+  - **(1) 資料不存在**：cluster 的 db-init Job 是早期 seed（只有 E001–E030）後跑的，seed.py 擴到 E0031–E1000 後從沒重跑成功——因為 `seed_data()` 用「有任何 user 就 return」做 idempotency，重跑沒效果。改為**先撈現有 employee_ids、逐筆 skip 已存在、新建缺少的**；events/reports 只在 fresh DB 才建（避免重複）；管理員需要時可在 admin 介面新建事件、新 user 會自動拿到 placeholder
+  - **(2) event loop 被 bcrypt 卡住**：`verify_password` 是同步 bcrypt（~250ms/次）在 async login 路由內呼叫，**鎖住整個 asyncio event loop**，單 pod 登入上限 ~4 req/s。改用 `asyncio.to_thread(bcrypt.checkpw, ...)` 把 CPU 工作丟去 thread pool，event loop 可繼續處理其他請求。`test_auth_utils.py` 三個 verify 測試一併改 async
+  - **(3) Job 再執行不拿新映像**：`k8s/05-db-init-job.yaml` 的 image tag 寫死 `:v1`，即使重 build 後 `kubectl delete job && apply` 還是跑舊版 seed。改成 `:latest` + `imagePullPolicy: Always`，每次重跑都會拉最新 build
+  - 配套：使用者需在 main merge 完、CI 把新 backend image 推到 Artifact Registry 後，跑 `kubectl -n safety-system delete job db-init && kubectl apply -f k8s/05-db-init-job.yaml`，新 seed 邏輯就會補上 E0031–E1000，Locust 登入恢復正常
 
 ---
 
