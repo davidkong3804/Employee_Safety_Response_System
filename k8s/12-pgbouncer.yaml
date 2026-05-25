@@ -33,6 +33,9 @@ data:
   POSTGRESQL_PORT: "5432"
   POSTGRESQL_DATABASE: "safety_response"
   POSTGRESQL_USERNAME: "app"
+  # Make the client-facing alias match the backend dbname so clients can
+  # connect with "safety_response" (otherwise Bitnami defaults the alias to "postgres").
+  PGBOUNCER_DATABASE: "safety_response"
 ---
 # Headless ClusterIP so backend pods resolve "pgbouncer" to one of the two
 # bouncer pods via kube-proxy round-robin.
@@ -46,7 +49,7 @@ spec:
     app: pgbouncer
   ports:
     - port: 5432
-      targetPort: 5432
+      targetPort: 6432
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -63,9 +66,13 @@ spec:
       labels:
         app: pgbouncer
     spec:
+      # Disable K8s service env injection — the Service is also named "pgbouncer",
+      # so K8s would inject PGBOUNCER_PORT=tcp://<ip>:5432 which collides with the
+      # Bitnami entrypoint's PGBOUNCER_PORT integer check.
+      enableServiceLinks: false
       containers:
         - name: pgbouncer
-          image: bitnami/pgbouncer:1.23.1
+          image: bitnamilegacy/pgbouncer:1.23.1
           envFrom:
             - configMapRef:
                 name: pgbouncer-config
@@ -76,15 +83,15 @@ spec:
                   name: backend-secret
                   key: POSTGRES_PASSWORD
           ports:
-            - containerPort: 5432
+            - containerPort: 6432
           readinessProbe:
             tcpSocket:
-              port: 5432
+              port: 6432
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: 5432
+              port: 6432
             initialDelaySeconds: 15
             periodSeconds: 15
           resources:
