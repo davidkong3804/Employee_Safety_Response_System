@@ -71,13 +71,21 @@
 │       ├── vitest.setup.ts                # jsdom + i18n + localStorage 清除
 │       └── __tests__/
 │           ├── components/
-│           │   ├── StatusBadge.test.tsx   # Badge 渲染 + CSS class
-│           │   └── ProtectedRoute.test.tsx # 路由保護邏輯
+│           │   ├── StatusBadge.test.tsx       # Badge 渲染 + CSS class
+│           │   ├── ProtectedRoute.test.tsx    # 路由保護邏輯
+│           │   ├── FacilitySelector.test.tsx  # 多選廠區 UX：全廠區 toggle、國家展開、disabled
+│           │   └── Navbar.test.tsx            # 角色 nav 連結可見性 + 登出
 │           ├── contexts/
 │           │   └── AuthContext.test.tsx   # login/logout/init/401 recovery
-│           └── api/
-│               ├── auth.test.ts           # login() / getMe()
-│               └── client.test.ts         # axios interceptors
+│           ├── api/
+│           │   ├── auth.test.ts           # login() / getMe()
+│           │   ├── client.test.ts         # axios interceptors
+│           │   ├── events.test.ts         # list/get/create/update/delete + facility 陣列
+│           │   ├── users.test.ts          # list (含 filters) + CRUD
+│           │   └── reports.test.ts        # 7 個 endpoint，含 query string 拼接
+│           └── pages/
+│               ├── Login.test.tsx         # 表單、登入後依角色 redirect、錯誤 toast
+│               └── ReportPage.test.tsx    # 一鍵回報核心流程、已回報視圖
 │
 └── tests/
     ├── e2e/
@@ -394,6 +402,67 @@ test: {
 - Request interceptor：無 token → 不加 header
 - Response interceptor：收到 401 → 清除 localStorage token
 
+#### `events.test.ts` / `users.test.ts` / `reports.test.ts`
+
+`vi.mock('../../api/client')` 取代 axios，僅驗證**呼叫合約**（method、path、payload）：
+
+| API client | 驗證重點 |
+|------------|---------|
+| `events.test.ts` | `listEvents` / `getEvent` / `createEvent`（含 `facility: string[]`）/ `updateEvent` / `deleteEvent` 對應 RESTful 路徑 |
+| `users.test.ts` | `listUsers` 三種 filter 組合（無、單一 role、facility+department）正確以 `params` 帶入 |
+| `reports.test.ts` | 7 個 endpoint；`getAllStatus` 用 `URLSearchParams` 拼接 `?facility=X&department=Y` 的順序正確 |
+
+#### `FacilitySelector.test.tsx`
+
+複雜 UX 元件（國家→地區→廠區三層階層 + 全廠區 master toggle）的核心互動：
+
+| 測試類別 | 驗證 |
+|---------|------|
+| 初始 render | 全廠區、四個國家、預設不展開、預設 `isAll=true`（value=[]）|
+| 全廠區 toggle | 勾起 → `onChange(allFabs)`；勾掉 → `onChange([])` |
+| 國家展開 | 點 Taiwan 顯示 Hsinchu / Miaoli / Zhunan...；fabs 數量 badge 顯示 `(11 fabs)` |
+| 顯式 fab 勾選 | 加入 fab → onChange 收到新陣列；取消 → onChange 收到 filter 後的陣列 |
+| disabled 邏輯 | `isAll=true` 時，子層 fab 勾選框 checked + disabled |
+
+#### `Navbar.test.tsx`
+
+依角色顯示 nav 連結：
+
+| 角色 | 應該看到 | 不該看到 |
+|------|---------|---------|
+| 未登入 | 整個 Navbar 不 render | — |
+| employee | Home | Dashboard / Event / User Management |
+| manager | Home / Dashboard | Event / User Management |
+| admin | Home / Dashboard / Event / User Management | — |
+
+外加：點 logout 按鈕呼叫 `logout()` 並 `navigate('/login')`；user name + role 正確顯示。
+
+#### `Login.test.tsx`
+
+`vi.spyOn(useAuth)` 注入 mock `login()`，`vi.mock('react-hot-toast')` 攔 toast：
+
+| 情境 | 驗證 |
+|------|------|
+| 表單 render | Employee ID / Password 兩個 placeholder + Login 按鈕 |
+| admin 登入 | navigate(`/admin/events`) |
+| manager 登入 | navigate(`/dashboard`) |
+| employee 登入 | navigate(`/`) |
+| 登入失敗 | `toast.error('Invalid employee ID or password')`，不 navigate |
+| 憑證傳遞 | `login(employeeId, password)` 收到使用者輸入的值 |
+
+#### `ReportPage.test.tsx`
+
+`vi.mock` 掉 `api/events` / `api/reports` / `react-hot-toast`，覆蓋核心 US-1 流程：
+
+| 情境 | 驗證 |
+|------|------|
+| 未回報視圖 | "I'm Safe" 與 "Need Help" 兩顆大按鈕 + textarea + event title |
+| 點 "I'm Safe" | `submitReport(eventId, { status: 'safe', message: undefined })` + 成功 toast |
+| 點 "Need Help" | `submitReport(eventId, { status: 'need_help', ... })` |
+| 訊息傳遞 | 在 textarea 輸入後再送出，message 一併傳入 |
+| 送出失敗 | `toast.error('Report failed, please retry')` |
+| 已回報視圖 | 顯示「You have already reported」+ 過往 message；隱藏兩顆按鈕 |
+
 ---
 
 ## 6. E2E 端對端測試 (Playwright)
@@ -556,13 +625,14 @@ HTML 報告位於 `tests/performance/reports/`（已加入 `.gitignore`）。
 ```yaml
 on:
   push:
-    branches: [main, feature/testing]
+    branches: [main, "feature/**", "fix/**", "test/**", "docs/**"]
   pull_request:
     branches: [main]
 ```
 
-- **Push 到 `feature/testing`**：開發中即時回饋
-- **PR 到 `main`**：合併前完整驗證
+- **Push 到任何 `feature/**` / `fix/**` / `test/**` / `docs/**` 分支**：開發中即時回饋（只跑測試 jobs，不觸發部署）
+- **Push 到 `main`**：跑測試 jobs + `build-and-push`（推 image 到 Artifact Registry）+ `deploy`（GKE rolling update）
+- **PR 到 `main`**：合併前完整驗證（僅測試 jobs）
 
 ### Pipeline 架構
 
@@ -583,12 +653,14 @@ e2e
 (docker compose + playwright, ~5-8 min)
 ```
 
-| Job | 依賴 | 描述 |
-|-----|------|------|
-| `backend-unit` | — | 不需要 DB，先快速失敗 |
-| `backend-integration` | — | 使用 GitHub Actions service container 的 PostgreSQL |
-| `frontend-unit` | — | pnpm vitest run + coverage |
-| `e2e` | `backend-integration` + `frontend-unit` | 完整 stack 啟動後跑 Playwright |
+| Job | 依賴 | 觸發條件 | 描述 |
+|-----|------|---------|------|
+| `backend-unit` | — | push / PR | 不需要 DB，先快速失敗 |
+| `backend-integration` | — | push / PR | 使用 GitHub Actions service container 的 PostgreSQL |
+| `frontend-unit` | — | push / PR | pnpm vitest run + coverage |
+| `e2e` | `backend-integration` + `frontend-unit` | push / PR | 完整 stack 啟動後跑 Playwright |
+| `build-and-push` | 上述 4 個全綠 | **只在 push 到 main** | 用 `GCP_SA_KEY` 認證、build + push backend/frontend image（`:<sha>` + `:latest`）到 Artifact Registry |
+| `deploy` | `build-and-push` | **只在 push 到 main** | `kubectl set image` + `rollout status`（180s timeout），滾動部署到 GKE |
 
 ### Artifacts（測試產物）
 
@@ -871,5 +943,12 @@ cd frontend && pnpm vitest run
 
 ---
 
-*文件最後更新：2026-05-10*  
-*對應 git branch：`feature/testing`*
+*文件最後更新：2026-05-25*  
+*對應 git branch：`main`*
+
+### 更新歷程
+
+| 日期 | 變更 |
+|------|------|
+| 2026-05-10 | 初版（feature/testing 分支）|
+| 2026-05-25 | 新增 7 個前端測試檔（FacilitySelector、Navbar、Login、ReportPage、events/users/reports API client，約 +55 test cases）；CI push trigger 補上 `test/**` 與 `docs/**`；CI/CD pipeline 表格補上 `build-and-push` / `deploy` 兩個 main-only job |

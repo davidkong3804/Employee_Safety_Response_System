@@ -116,7 +116,12 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 - 測試：後端 unit/integration、前端 Vitest、E2E Playwright、Locust 皆完整
 - 遠端分支清理（feature/testing、docs/handoff 已合併或刪除）
 - **D1（部分）**：`k8s/02-secret.yaml` 移出版控 — 改 `02-secret.yaml.example` 範本 + `.gitignore`，`docs/deployment.md`、`CLAUDE.md` 同步更新部署步驟
-- **前端測試覆蓋擴充**：補上 7 個測試檔（events / users / reports API client、FacilitySelector、Navbar、Login、ReportPage），補齊先前沒有 page-level 與 FacilitySelector 測試的缺口；新增 i18n keys 進 `vitest.setup.ts`
+- **前端測試覆蓋擴充（2026-05-25）**：補上 7 個 Vitest 測試檔，約 55 個 test cases，CI 全綠
+  - API client：`events.test.ts`、`users.test.ts`、`reports.test.ts`
+  - 元件：`FacilitySelector.test.tsx`（全廠區 toggle、國家展開、disabled 邏輯）、`Navbar.test.tsx`（角色 nav + 登出）
+  - 頁面：`Login.test.tsx`（登入後依角色 redirect）、`ReportPage.test.tsx`（一鍵回報核心流程 / 已回報視圖）
+  - 同步擴充 `vitest.setup.ts` 的 i18n keys（`app.title` / `report.*` / `event.allFacilities` / `facility.*`）
+- **CI trigger 補洞（2026-05-25）**：`.github/workflows/ci.yml` 的 `push.branches` 原本只列 `[main, feature/**, fix/**]`，`test/**` 與 `docs/**` 分支推送會靜默不跑 CI（上面前端測試擴充 PR 第一次推就踩到）。補上後所有慣用 prefix 都會跑測試 jobs；`build-and-push` 與 `deploy` 仍 gate 在 main，不會誤觸發部署
 
 ---
 
