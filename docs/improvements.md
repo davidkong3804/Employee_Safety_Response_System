@@ -13,10 +13,10 @@
 
 | # | 位置 | 問題 | 正確值 |
 |---|------|------|--------|
-| A1 | `docs/architecture.md` L52-54 | 寫 backend HPA「3–30 pods」、frontend「2–10 pods」 | 實際 `minReplicas: 1`（`k8s/07-backend-hpa.yaml`、`k8s/09-frontend-hpa.yaml`） |
-| A2 | `docs/deployment.md` L119-120 | 同上，寫「Backend HPA: 3–30」「Frontend HPA: 2–10」 | 同上，應為 1–30 / 1–10 |
-| A3 | `docs/deployment.md` L139-144 | 寫 `max_connections=200`、`30 x 5 = 150 < 200` | 實際 `k8s/03-postgres.yaml` 設 `max_connections=350` |
-| A4 | `k8s/01-configmap.yaml` L17-19 | 註解寫 `60 x (3+2) = 300 < 350` | backend HPA `maxReplicas` 實際是 30，不是 60 |
+| A1 | ~~`docs/architecture.md` L52-54 + L174~~ | ✅ **已修 (2026-05-25)**：圖內副本數改為 1–30 / 1–10；scalability section 一併改 | — |
+| A2 | ~~`docs/deployment.md` L119-120~~ | ✅ **已修 (2026-05-25)**：改為「Backend HPA: 1–30」「Frontend HPA: 1–10」 | — |
+| A3 | ~~`docs/deployment.md` L139-144~~ | ✅ **已修 (2026-05-25)**：算式改為 `30 x 5 = 150 < 350`，敘述更新成 `max_connections=350` + 60 pods 為 pgbouncer 上限門檻 | — |
+| A4 | ~~`k8s/01-configmap.yaml` L17-19~~ | ✅ **已修 (2026-05-25)**：註解改寫成 `30 x (3+2) = 150 < 350`，並說明 60 pods 是擴充上限（要 pgbouncer 就上）| — |
 | A5 | ~~`docs/er-diagram.md` EVENTS 表~~ | ✅ **已修 (2026-05-25)**：EVENTS 表加上 `facility` 陣列欄位 + Table Details 補上 facility 章節說明 | — |
 | A6 | ~~`docs/api-spec.md` `POST /api/events`~~ | ✅ **已修 (2026-05-25)**：POST 範例 body 含 `facility` 陣列、補上 `facility` 欄位的語意說明（空/null = 全廠區）| — |
 
@@ -32,11 +32,11 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 
 | # | 位置 | 問題 | 建議 |
 |---|------|------|------|
-| B1 | `EventManagement.tsx` `handleClose` / `handleDelete` | 無 `try/catch`，API 失敗時不會顯示錯誤 toast，使用者以為成功 | 比照 `handleCreate` 加上 `try/catch` + `toast.error` |
-| B2 | `UserManagement.tsx` `handleDeactivate` | 同上，無錯誤處理 | 同上 |
-| B3 | `EventManagement.tsx` 刪除事件 / `UserManagement.tsx` 停用使用者 | 點下去**立即執行**，無二次確認 | 加 confirm dialog（破壞性操作） |
-| B4 | 各 Create / 送出按鈕 | 送出期間未 disable，連點可能重複建立 | submit 期間 `disabled` + loading 狀態 |
-| B5 | `Login.tsx` L74-77 | 登入頁直接印出 demo 帳密（A001 / M001 / E001） | 正式環境應移除，或用 `import.meta.env.DEV` 包起來只在開發顯示 |
+| B1 | ~~`EventManagement.tsx`~~ | ✅ **已修 (2026-05-25)**：`handleClose` / `handleDelete` 補 `try/catch` + 失敗 toast | — |
+| B2 | ~~`UserManagement.tsx`~~ | ✅ **已修 (2026-05-25)**：`handleDeactivate` 補 `try/catch` + 失敗 toast | — |
+| B3 | ~~破壞性操作~~ | ✅ **已修 (2026-05-25)**：關閉事件 / 刪除事件 / 停用使用者三處皆加 `window.confirm` 二次確認，i18n 文案分開（close/delete/deactivateConfirm）| — |
+| B4 | ~~各 Create 按鈕~~ | ✅ **已修 (2026-05-25)**：EventManagement / UserManagement 加 `submitting` state，送出期間 `disabled` + 顯示 "Creating..." 文案 | — |
+| B5 | ~~`Login.tsx`~~ | ✅ **已修 (2026-05-25)**：demo 帳密 div 用 `import.meta.env.DEV` 包起來，正式 build 不會打包 | — |
 
 ---
 
@@ -68,7 +68,7 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
 
 | # | 位置 | 優先 | 問題 | 建議 |
 |---|------|------|------|------|
-| E1 | GitHub repo Settings | 🔴 | `GCP_SA_KEY` / `GKE_CLUSTER` / `GKE_REGION` 三個 secret 尚未設定，build/deploy job 會失敗 | 一次性設定（值：cluster `safety-response`、zone `asia-east1-a`，SA 需 `artifactregistry.writer` + `container.developer`） |
+| E1 | ~~GitHub repo Settings~~ | 🟢 | ✅ **已完成 (2026-05-25)**：使用者已在 GitHub Settings → Actions secrets 設定 `GCP_SA_KEY` / `GKE_CLUSTER` / `GKE_REGION`，CI 後續 push 到 main 會自動跑 build-and-push + deploy | — |
 | E2 | `k8s/06-backend.yaml`、`08-frontend.yaml` | 🟡 | manifests image 寫死 `:v1`，但 deploy job 用 `kubectl set image` 設成 `:<git-sha>` → 兩者 drift。任何人跑 `kubectl apply -f k8s/` 會把線上 image revert 回 `:v1` | 導入 Kustomize，用 `images:` override 由 CI 動態帶 tag；或 deploy 後讓 CI 回寫 manifests |
 
 ---
@@ -129,16 +129,26 @@ backend 1–30、frontend 1–10、`max_connections=350`、`30 x 5 = 150 < 350`�
   - 工具不寫進 `package.json` / `requirements.txt`，CI 用 `npm install -g` / `pip install` 動態安裝，避免 lockfile 同步問題
   - **A5/A6 同步修畢**：ER 圖 + API spec 補上 Event.facility 陣列說明
 - **文件不一致修補（2026-05-25）**：A5、A6 完成（見 A 區）
+- **文件 + UX 清理一輪（2026-05-25 第二批）**：
+  - 🟡 **A1–A4** 全清：架構圖 / deployment.md / configmap 註解中的 HPA 副本數與 `max_connections` 一致改為 1–30 / 1–10 / 350，算式同步成 `30 x 5 = 150 < 350`
+  - 🟡 **B1–B5** 全清：
+    - EventManagement `handleClose` / `handleDelete`、UserManagement `handleDeactivate` 補完 try/catch + 失敗 toast
+    - 破壞性操作（關閉事件 / 刪除事件 / 停用使用者）加上 `window.confirm` 二次確認，i18n 文案分開（`event.closeConfirm` / `event.deleteConfirm` / `user.deactivateConfirm`）
+    - 送出按鈕 `disabled` + "Creating..." 顯示，避免連點重複建立
+    - Login 頁 demo 帳密 div 用 `import.meta.env.DEV` 包起來，production build 不會打包
+  - 🔴 → 🟢 **E1**：使用者完成 GitHub Secrets 設定（`GCP_SA_KEY` / `GKE_CLUSTER` / `GKE_REGION`），CI/CD pipeline 從此全啟用
 
 ---
 
 ## 建議處理順序
 
-1. **🔴 E1** — 設定 CI secrets，讓 pipeline 能跑（GitHub UI 操作，僅你能做）
+1. ~~🔴 E1~~ — ✅ secrets 已設定，CI/CD pipeline 全啟用
 2. ~~🔴 D1~~ — ✅ secrets 已移出版控；正式上線前仍須換真值並評估 Secret Manager
-3. ~~🟡 A5、A6~~ — ✅ 已修；剩 A1–A4（HPA 副本數、`max_connections` 等註解口誤）
-4. **🟡 B1–B4** — 前端錯誤處理與二次確認（體驗品質）
+3. ~~🟡 A1–A6~~ — ✅ 全清
+4. ~~🟡 B1–B5~~ — ✅ 全清
 5. **🟡 E2** — 導入 Kustomize 解決 image tag drift
 6. **🟡 C3** — Redis 接上 dashboard 快取（壓測前做，效益明顯）
 7. **🟡 Prettier strict 化** — 跑一次 `pnpm exec prettier --write src/`，然後拿掉 CI 的 `continue-on-error`
-8. **🟢 F、G** — 監控與未來功能，依專案時程排入
+8. **🟡 C1 / C2 / C4 / C5** — 後端優化（bulk insert、targeted refresh 一致化、分頁、Alembic）
+9. **🟡 D2–D5** — k8s 部署面（HTTPS 強制、Cloud SQL HA、db-init Job 重跑流程）
+10. **🟢 F、G** — 監控與未來功能（F1/F2 已由隊友建好 Prometheus + Grafana + alerts），依專案時程排入

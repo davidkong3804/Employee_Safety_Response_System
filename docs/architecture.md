@@ -50,7 +50,7 @@ replicas behind a load balancer. Manifests live in `k8s/`; see
               ┌────────▼────────┐        ┌────────▼────────┐
               │  backend Svc     │        │  frontend Svc    │
               │  Deployment+HPA  │        │  Deployment+HPA  │
-              │  3–30 pods       │        │  2–10 pods       │
+              │  1–30 pods       │        │  1–10 pods       │
               │  FastAPI :8000   │        │  nginx :8080     │
               └────────┬────────┘        └─────────────────┘
                        │
@@ -171,7 +171,7 @@ races across replicas; a single run-once job does not.
 ## Scalability Considerations
 
 ### Horizontal Scaling
-- Backend is stateless → scales to N replicas behind a load balancer (HPA: 3–30)
+- Backend is stateless → scales to N replicas behind a load balancer (HPA: 1–30)
 - Connection pool sized per pod so `replicas x (pool_size + max_overflow)`
   stays under Postgres `max_connections`; pgbouncer for larger scale
 - PostgreSQL supports read replicas for dashboard queries
