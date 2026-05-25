@@ -22,6 +22,7 @@ Acceptance thresholds (check in the HTML report):
   - Throughput > 100 RPS for read endpoints
 """
 
+import itertools
 import random
 from typing import Optional
 
@@ -38,8 +39,14 @@ EMPLOYEE_CREDS = [
     {"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)
 ]
 
+# Round-robin iterators so each virtual user gets a unique slot (cycles if
+# more virtual users than real accounts, but avoids hot-spot collisions).
+_employee_cycle = itertools.cycle(EMPLOYEE_CREDS)
+_manager_cycle  = itertools.cycle(MANAGER_CREDS)
+_admin_cycle    = itertools.cycle([ADMIN_CREDS])
+
 # Shared cache – populated once when an AdminUser starts up
-_active_event_ids: list[str] = []
+_active_event_ids = []
 
 
 class _BaseUser(HttpUser):
@@ -62,6 +69,10 @@ class _BaseUser(HttpUser):
             else:
                 r.failure(f"Login failed {r.status_code}")
 
+    def _refresh_token(self, creds: dict) -> None:
+        """Re-login if token seems stale (called on 401)."""
+        self._login(creds)
+
 
 # ---------------------------------------------------------------------------
 # Employee (weight 30)
@@ -70,7 +81,8 @@ class EmployeeUser(_BaseUser):
     weight = 30
 
     def on_start(self) -> None:
-        self._login(random.choice(EMPLOYEE_CREDS))
+        self._creds = next(_employee_cycle)
+        self._login(self._creds)
 
     @task(5)
     def list_events(self) -> None:
@@ -81,23 +93,29 @@ class EmployeeUser(_BaseUser):
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        self.client.post(
+        with self.client.post(
             f"/api/events/{event_id}/report",
             json={"status": random.choice(["safe", "need_help"])},
             headers=self._headers(),
             name="POST /api/events/{id}/report",
-        )
+            catch_response=True,
+        ) as r:
+            if r.status_code == 401:
+                self._refresh_token(self._creds)
 
     @task(2)
     def get_my_report(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        self.client.get(
+        with self.client.get(
             f"/api/events/{event_id}/my-report",
             headers=self._headers(),
             name="GET /api/events/{id}/my-report",
-        )
+            catch_response=True,
+        ) as r:
+            if r.status_code == 401:
+                self._refresh_token(self._creds)
 
     @task(1)
     def health_check(self) -> None:
@@ -111,40 +129,50 @@ class ManagerUser(_BaseUser):
     weight = 5
 
     def on_start(self) -> None:
-        self._login(random.choice(MANAGER_CREDS))
+        self._creds = next(_manager_cycle)
+        self._login(self._creds)
 
     @task(3)
     def get_team_status(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        self.client.get(
+        with self.client.get(
             f"/api/events/{event_id}/team-status",
             headers=self._headers(),
             name="GET /api/events/{id}/team-status",
-        )
+            catch_response=True,
+        ) as r:
+            if r.status_code == 401:
+                self._refresh_token(self._creds)
 
     @task(2)
     def get_stats(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        self.client.get(
+        with self.client.get(
             f"/api/events/{event_id}/stats",
             headers=self._headers(),
             name="GET /api/events/{id}/stats",
-        )
+            catch_response=True,
+        ) as r:
+            if r.status_code == 401:
+                self._refresh_token(self._creds)
 
     @task(1)
     def trigger_reminders(self) -> None:
         if not _active_event_ids:
             return
         event_id = random.choice(_active_event_ids)
-        self.client.post(
+        with self.client.post(
             f"/api/events/{event_id}/remind",
             headers=self._headers(),
             name="POST /api/events/{id}/remind",
-        )
+            catch_response=True,
+        ) as r:
+            if r.status_code == 401:
+                self._refresh_token(self._creds)
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +182,8 @@ class AdminUser(_BaseUser):
     weight = 3
 
     def on_start(self) -> None:
-        self._login(ADMIN_CREDS)
+        self._creds = next(_admin_cycle)
+        self._login(self._creds)
         # Populate shared cache with active event IDs
         r = self.client.get("/api/events", headers=self._headers())
         if r.status_code == 200:
