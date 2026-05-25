@@ -100,6 +100,26 @@ async def seed_data():
             employees.append(e)
         await session.flush()
 
+        # --- Create extra load-test employees (E031–E1000) ---
+        depts    = ["製造一部", "製造二部", "製造一部", "設備部", "品質部"]
+        facilits = ["Fab14", "Fab14", "Fab18", "Fab14", "Fab18"]
+        for i in range(31, 1001):
+            mgr_idx = (i - 1) % len(managers)
+            e = User(
+                employee_id=f"E{i:04d}",
+                name=f"測試員工{i:04d}",
+                email=f"test.emp{i:04d}@tsmc.com",
+                password_hash=DEFAULT_PASSWORD,
+                role="employee",
+                department=depts[mgr_idx],
+                facility=facilits[mgr_idx],
+                phone=f"09{i:08d}",
+                manager_id=managers[mgr_idx].id,
+            )
+            session.add(e)
+            employees.append(e)
+        await session.flush()
+
         all_users = admins + managers + employees
 
         # --- Create Events ---

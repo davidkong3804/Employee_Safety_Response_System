@@ -35,9 +35,10 @@ ADMIN_CREDS = {"employee_id": "A001", "password": "password123"}
 MANAGER_CREDS = [
     {"employee_id": f"M{i:03d}", "password": "password123"} for i in range(1, 6)
 ]
-EMPLOYEE_CREDS = [
-    {"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)
-]
+EMPLOYEE_CREDS = (
+    [{"employee_id": f"E{i:03d}", "password": "password123"} for i in range(1, 31)]
+    + [{"employee_id": f"E{i:04d}", "password": "password123"} for i in range(31, 1001)]
+)
 
 # Round-robin iterators so each virtual user gets a unique slot (cycles if
 # more virtual users than real accounts, but avoids hot-spot collisions).
