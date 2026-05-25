@@ -29,7 +29,9 @@ data:
   PGBOUNCER_LOG_CONNECTIONS: "0"
   PGBOUNCER_LOG_DISCONNECTIONS: "0"
   PGBOUNCER_LOG_POOLER_ERRORS: "1"
-  POSTGRESQL_HOST: "postgres"
+  # Stage 3-B: upstream switched from in-cluster postgres to cloudsql-proxy,
+  # which fronts the Cloud SQL HA instance via Workload Identity + private IP.
+  POSTGRESQL_HOST: "cloudsql-proxy"
   POSTGRESQL_PORT: "5432"
   POSTGRESQL_DATABASE: "safety_response"
   POSTGRESQL_USERNAME: "app"
