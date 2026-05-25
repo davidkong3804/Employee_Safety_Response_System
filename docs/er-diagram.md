@@ -26,6 +26,7 @@ erDiagram
         varchar(50) event_type "earthquake | fire | flood | security | other"
         enum severity "low | medium | high | critical"
         enum status "active | closed"
+        varchar50_array facility "ARRAY of fab codes; NULL = all facilities"
         uuid created_by FK
         timestamp created_at
         timestamp closed_at
@@ -70,7 +71,8 @@ The central entity representing all system users across three roles.
 Emergency events created by administrators.
 - **Lifecycle**: `active` → `closed` (sets `closed_at` timestamp)
 - **Types**: earthquake, fire, flood, security, other
-- **On creation**: automatically generates one `safety_report` record per active user
+- **Facility scoping**: `facility` is a Postgres `VARCHAR(50)[]` (`ARRAY(String(50))` in SQLAlchemy). Holds the fab codes affected by the event (e.g. `['Fab14', 'Fab18']`). `NULL` / empty means **all facilities** — the event is global.
+- **On creation**: automatically generates one `safety_report` placeholder per active user; if `facility` is non-empty, only users whose `User.facility` is in that list get a placeholder.
 
 ### safety_reports
 Core reporting table with one record per user per event.
