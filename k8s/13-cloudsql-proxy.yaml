@@ -1,0 +1,67 @@
+# Cloud SQL Auth Proxy sidecar — Strategic Merge Patch for the backend Deployment.
+#
+# Apply AFTER the base manifests (k8s/06-backend.yaml) to inject the proxy:
+#   kubectl apply -f k8s/06-backend.yaml
+#   kubectl apply -f k8s/13-cloudsql-proxy.yaml
+#
+# Prerequisites (see docs/deployment.md for full steps):
+#   1. Cloud SQL instance created with HA enabled.
+#   2. GCP service account "safety-backend@PROJECT_ID.iam.gserviceaccount.com"
+#      granted roles/cloudsql.client.
+#   3. Workload Identity binding between the GCP SA and this k8s SA.
+#   4. k8s/02-secret.yaml redeployed with:
+#        DATABASE_URL: postgresql+asyncpg://app:<pw>@127.0.0.1:5432/safety_response
+#        CLOUDSQL_INSTANCE_CONNECTION_NAME: PROJECT_ID:REGION:INSTANCE_NAME
+#
+# When Cloud SQL HA is active, k8s/03-postgres.yaml can be removed.
+---
+# Kubernetes ServiceAccount annotated for Workload Identity.
+# Replace PROJECT_ID with your GCP project before applying.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  namespace: safety-system
+  annotations:
+    iam.gke.io/gcp-service-account: safety-backend@PROJECT_ID.iam.gserviceaccount.com
+---
+# Strategic Merge Patch: add the Auth Proxy sidecar and switch to backend-sa.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: safety-system
+spec:
+  template:
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "$(CLOUDSQL_INSTANCE_CONNECTION_NAME)"
+          env:
+            - name: CLOUDSQL_INSTANCE_CONNECTION_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: CLOUDSQL_INSTANCE_CONNECTION_NAME
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false

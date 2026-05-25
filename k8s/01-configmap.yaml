@@ -5,6 +5,9 @@ metadata:
   name: backend-config
   namespace: safety-system
 data:
+  # 3-C: Update to Cloud Memorystore private IP after provisioning.
+  # gcloud redis instances describe safety-redis --region=REGION --format='get(host)'
+  # Until then, keep pointing at the in-cluster redis pod (k8s/04-redis.yaml).
   REDIS_URL: "redis://redis:6379"
   JWT_EXPIRE_MINUTES: "480"
 
@@ -13,14 +16,11 @@ data:
   # real domain if you ever call the API cross-origin.
   CORS_ORIGINS: "http://localhost,https://employee-safety.duckdns.org"
 
-  # Connection pool per backend pod. Keep
-  #   maxReplicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW)
-  # below Postgres max_connections (set to 350 in 03-postgres.yaml).
-  # HPA is now 3-60; 60 x (2 + 1) = 180 connections at peak —
-  # within the 350 limit until PgBouncer is deployed.
-  # After PgBouncer (k8s/12-pgbouncer.yaml), raise to DB_POOL_SIZE=10,
-  # DB_MAX_OVERFLOW=5 since PgBouncer multiplexes to ~50 real DB connections.
-  DB_POOL_SIZE: "2"
-  DB_MAX_OVERFLOW: "1"
+  # Connection pool per backend pod.
+  # 3-A: PgBouncer (k8s/12-pgbouncer.yaml) is now the DB proxy; it multiplexes
+  # up to 1000 client connections into ~50 real server connections.
+  # 60 pods x (10 + 5) = 900 client conns → PgBouncer → ≤50 real DB conns.
+  DB_POOL_SIZE: "10"
+  DB_MAX_OVERFLOW: "5"
   DB_POOL_TIMEOUT: "30"
   DB_POOL_RECYCLE: "1800"

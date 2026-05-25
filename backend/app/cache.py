@@ -62,6 +62,13 @@ def _get_client() -> redis_async.Redis:
             decode_responses=True,
             socket_timeout=2,
             socket_connect_timeout=2,
+            # Retry once on timeout so transient Cloud Memorystore hiccups don't
+            # immediately surface as errors to callers. The outer try/except still
+            # catches any remaining failure and degrades gracefully.
+            retry_on_timeout=True,
+            # Send periodic PING to detect stale connections before they are used,
+            # important for long-lived pods connecting to Memorystore across VPC.
+            health_check_interval=30,
         )
     return _client
 
