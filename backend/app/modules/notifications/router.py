@@ -23,13 +23,18 @@ async def trigger_reminders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
-    # 1. Collect user_ids of employees who haven't reported yet.
-    #    Select only the column we need — avoids loading snapshot fields that
-    #    may not exist on an older schema (defensive against partial migration).
+    # 1. Collect user_ids of employees who haven't reported yet AND are still
+    #    active. JOIN with users so placeholder rows for deactivated /
+    #    pruned accounts (e.g. surplus load-test employees removed via
+    #    prune-users) don't get reminded — matching the event-creation
+    #    logic in events/router.py which also filters by is_active.
     unreported_rows = await db.execute(
-        select(SafetyReport.user_id).where(
+        select(SafetyReport.user_id)
+        .join(User, SafetyReport.user_id == User.id)
+        .where(
             SafetyReport.event_id == event_id,
             SafetyReport.status.is_(None),
+            User.is_active.is_(True),
         )
     )
     unreported_user_ids: list[UUID] = [row[0] for row in unreported_rows.all()]
