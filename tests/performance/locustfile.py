@@ -38,10 +38,10 @@ WARMUP_OVERFETCH_FACTOR = 2     # warm 2× VU count so random.choice has slack
 # Seed credentials (password123 for all)
 #
 # Capacity must match backend/app/seed.py LOAD_TEST_MAX_EMPLOYEES — currently
-# 15000. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
-# are auto-generated test accounts with 4-or-more-digit IDs.
+# 500. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
+# are auto-generated test accounts with 4-digit IDs.
 # ---------------------------------------------------------------------------
-LOAD_TEST_MAX_EMPLOYEES = 15000
+LOAD_TEST_MAX_EMPLOYEES = 500
 
 ADMIN_CREDS = {"employee_id": "A001", "password": "password123"}
 MANAGER_CREDS = [
@@ -69,8 +69,8 @@ def warmup_tokens(environment, **kwargs) -> None:
     the business-endpoint metrics.
 
     Two changes from the original implementation:
-      1. **Concurrent fetch**: 15000 sequential logins at ~300ms each takes
-         ~75 minutes. ThreadPoolExecutor(50) overlaps requests so the
+      1. **Concurrent fetch**: 500 sequential logins at ~300ms each takes
+         ~150s. ThreadPoolExecutor(50) overlaps requests so the
          async-bcrypt backend can use multiple threads in parallel.
       2. **Bounded warmup**: only pre-warm tokens we actually need. A test
          with N VUs distributes credentials via `random.choice`, so the
