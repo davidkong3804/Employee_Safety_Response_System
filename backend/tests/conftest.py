@@ -20,7 +20,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base, get_db
+from app.database import Base, get_db, get_read_db
 from app.main import app
 from app.modules.auth.router import create_access_token, hash_password
 from app.modules.events.models import Event
@@ -77,6 +77,7 @@ async def client(db_session):
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
