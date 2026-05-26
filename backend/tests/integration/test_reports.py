@@ -115,7 +115,20 @@ class TestGetMyReport:
 
 @pytest.mark.integration
 class TestEventStats:
-    async def test_initial_stats_all_unreported(
+    async def test_admin_sees_event_wide_totals(
+        self, client, admin_headers, active_event
+    ):
+        r = await client.get(
+            f"/api/events/{active_event.id}/stats", headers=admin_headers
+        )
+        assert r.status_code == 200
+        data = r.json()
+        # Admin sees all 3 placeholders (admin + manager + employee).
+        assert data["total"] == 3
+        assert data["unreported"] == 3
+        assert data["report_rate"] == 0.0
+
+    async def test_manager_stats_scoped_to_own_department(
         self, client, manager_headers, active_event
     ):
         r = await client.get(
@@ -123,13 +136,28 @@ class TestEventStats:
         )
         assert r.status_code == 200
         data = r.json()
-        assert data["total"] == 3
-        assert data["safe"] == 0
-        assert data["need_help"] == 0
-        assert data["unreported"] == 3
-        assert data["report_rate"] == 0.0
+        # Manager is in Engineering — sees only Engineering placeholders
+        # (manager + employee), NOT the admin (who is in IT).
+        assert data["total"] == 2
+        assert data["unreported"] == 2
 
-    async def test_stats_after_one_safe_report(
+    async def test_stats_after_one_safe_report_admin_view(
+        self, client, admin_headers, employee_headers, active_event
+    ):
+        event_id = str(active_event.id)
+        await client.post(
+            f"/api/events/{event_id}/report",
+            json={"status": "safe"},
+            headers=employee_headers,
+        )
+        r = await client.get(f"/api/events/{event_id}/stats", headers=admin_headers)
+        data = r.json()
+        # 1 safe out of 3 total.
+        assert data["safe"] == 1
+        assert data["unreported"] == 2
+        assert data["report_rate"] == pytest.approx(33.3, abs=0.1)
+
+    async def test_stats_after_one_safe_report_manager_view(
         self, client, manager_headers, employee_headers, active_event
     ):
         event_id = str(active_event.id)
@@ -140,9 +168,10 @@ class TestEventStats:
         )
         r = await client.get(f"/api/events/{event_id}/stats", headers=manager_headers)
         data = r.json()
+        # Manager-scoped: 1 safe out of 2 Engineering rows (manager + employee).
         assert data["safe"] == 1
-        assert data["unreported"] == 2
-        assert data["report_rate"] == pytest.approx(33.3, abs=0.1)
+        assert data["unreported"] == 1
+        assert data["report_rate"] == pytest.approx(50.0, abs=0.1)
 
     async def test_employee_cannot_see_stats(self, client, employee_headers, active_event):
         r = await client.get(
@@ -153,23 +182,30 @@ class TestEventStats:
 
 @pytest.mark.integration
 class TestStatsByDepartment:
-    async def test_groups_by_department(
-        self, client, manager_headers, employee_headers, active_event
+    async def test_admin_sees_all_departments(
+        self, client, admin_headers, active_event
     ):
-        event_id = str(active_event.id)
-        await client.post(
-            f"/api/events/{event_id}/report",
-            json={"status": "safe"},
-            headers=employee_headers,
-        )
         r = await client.get(
-            f"/api/events/{event_id}/stats/by-department", headers=manager_headers
+            f"/api/events/{active_event.id}/stats/by-department", headers=admin_headers
+        )
+        assert r.status_code == 200
+        dept_names = {d["department"] for d in r.json()}
+        assert "Engineering" in dept_names
+        assert "IT" in dept_names
+
+    async def test_manager_dept_stats_only_own_department(
+        self, client, manager_headers, active_event
+    ):
+        r = await client.get(
+            f"/api/events/{active_event.id}/stats/by-department",
+            headers=manager_headers,
         )
         assert r.status_code == 200
         data = r.json()
-        dept_names = {d["department"] for d in data}
-        assert "Engineering" in dept_names  # manager + employee
-        assert "IT" in dept_names  # admin
+        # Manager only sees their own dept on the chart — no cross-dept leak.
+        assert {d["department"] for d in data} == {"Engineering"}
+        eng = next(d for d in data if d["department"] == "Engineering")
+        assert eng["total"] == 2  # manager + employee, not admin
 
     async def test_employee_cannot_see_department_stats(
         self, client, employee_headers, active_event
@@ -459,17 +495,21 @@ class TestOrgSnapshotIsolation:
     async def test_dept_stats_stable_when_user_changes_department(
         self,
         client,
-        manager_headers,
+        admin_headers,
         admin_user,
         manager_user,
         employee_user,
         db_session,
         active_event,
     ):
-        # Capture the baseline department distribution before any change.
+        # Use admin's full-event view here: a manager's *own* dept change
+        # legitimately shifts the manager's scope (their view follows them
+        # to the new department by design), so the stability invariant —
+        # historical snapshot data doesn't move — has to be checked from
+        # an unscoped viewpoint.
         before = await client.get(
             f"/api/events/{active_event.id}/stats/by-department",
-            headers=manager_headers,
+            headers=admin_headers,
         )
         assert before.status_code == 200
         before_depts = {d["department"]: d["total"] for d in before.json()}
@@ -484,7 +524,7 @@ class TestOrgSnapshotIsolation:
         # not the new "MovedDept" assignment.
         after = await client.get(
             f"/api/events/{active_event.id}/stats/by-department",
-            headers=manager_headers,
+            headers=admin_headers,
         )
         assert after.status_code == 200
         after_depts = {d["department"]: d["total"] for d in after.json()}

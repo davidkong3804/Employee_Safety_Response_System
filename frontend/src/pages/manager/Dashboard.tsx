@@ -7,6 +7,7 @@ import { List, type RowComponentProps } from 'react-window'
 import { listEvents } from '../../api/events'
 import { getEventStats, getStatsByDepartment, getTeamStatus, triggerReminders, type TeamStatusParams } from '../../api/reports'
 import StatusBadge from '../../components/StatusBadge'
+import { useAuth } from '../../contexts/AuthContext'
 import type { Event, EventStats, DepartmentStats, SafetyReport } from '../../types'
 
 const COLORS = { safe: '#22c55e', need_help: '#ef4444', unreported: '#9ca3af' }
@@ -21,6 +22,8 @@ type StatusFilter = '' | 'safe' | 'need_help' | 'unreported'
 
 export default function Dashboard() {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [stats, setStats] = useState<EventStats | null>(null)
@@ -245,12 +248,14 @@ export default function Dashboard() {
                 className="pl-7 pr-2 py-1 border rounded text-sm w-48"
               />
             </div>
-            <select value={filterDept} onChange={e => setFilterDept(e.target.value)} className="px-2 py-1 border rounded text-sm">
-              <option value="">{t('dashboard.department')}: {t('dashboard.all')}</option>
-              {deptStats.map(d => (
-                <option key={d.department} value={d.department}>{d.department}</option>
-              ))}
-            </select>
+            {isAdmin && (
+              <select value={filterDept} onChange={e => setFilterDept(e.target.value)} className="px-2 py-1 border rounded text-sm">
+                <option value="">{t('dashboard.department')}: {t('dashboard.all')}</option>
+                {deptStats.map(d => (
+                  <option key={d.department} value={d.department}>{d.department}</option>
+                ))}
+              </select>
+            )}
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as StatusFilter)} className="px-2 py-1 border rounded text-sm">
               <option value="">{t('common.status')}: {t('dashboard.all')}</option>
               <option value="need_help">{t('status.need_help')}</option>

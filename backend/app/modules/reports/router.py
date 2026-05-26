@@ -56,16 +56,26 @@ _URGENCY_ORDER = case(
 router = APIRouter(prefix="/api/events", tags=["reports"])
 
 
-def _stats_cache_key(event_id: UUID) -> str:
-    return f"stats:event:{event_id}:overall"
+def _scope_token(user: "User") -> str:
+    """Distinguish admin (sees the full event) from a manager (sees only their
+    department). Embedded into cache keys so an admin's full-event aggregate
+    can't leak into a manager's dept-scoped view (or vice versa)."""
+    if user.role == "admin":
+        return "all"
+    return f"dept:{user.department or '_none'}"
 
 
-def _dept_stats_cache_key(event_id: UUID) -> str:
-    return f"stats:event:{event_id}:by-department"
+def _stats_cache_key(event_id: UUID, scope: str) -> str:
+    return f"stats:event:{event_id}:overall:{scope}"
+
+
+def _dept_stats_cache_key(event_id: UUID, scope: str) -> str:
+    return f"stats:event:{event_id}:by-department:{scope}"
 
 
 def _event_cache_pattern(event_id: UUID) -> str:
-    """All cache keys related to one event — used to invalidate after writes."""
+    """All cache keys related to one event — used to invalidate after writes.
+    Wildcard matches every scope variant (all / dept:*)."""
     return f"stats:event:{event_id}:*"
 
 
@@ -182,16 +192,23 @@ async def get_event_stats(
     # Cache check first — Manager Dashboard polls every 30s, so many
     # managers viewing the same event amplify this query N times in a
     # second. Cache hit returns immediately without hitting Postgres.
-    cache_key = _stats_cache_key(event_id)
+    # Scope is part of the key so admin (full event) and manager (own dept)
+    # can never collide on a shared cache entry.
+    scope = _scope_token(current_user)
+    cache_key = _stats_cache_key(event_id, scope)
     cached = await cache_get_json(cache_key)
     if cached is not None:
         return EventStats(**cached)
 
-    result = await db.execute(
+    query = (
         select(SafetyReport.status, func.count(SafetyReport.id))
         .where(SafetyReport.event_id == event_id)
-        .group_by(SafetyReport.status)
     )
+    if current_user.role != "admin":
+        query = query.where(SafetyReport.department_snapshot == current_user.department)
+    query = query.group_by(SafetyReport.status)
+
+    result = await db.execute(query)
     counts = {row[0]: row[1] for row in result.all()}
     safe = counts.get("safe", 0)
     need_help = counts.get("need_help", 0)
@@ -214,7 +231,8 @@ async def get_stats_by_department(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
-    cache_key = _dept_stats_cache_key(event_id)
+    scope = _scope_token(current_user)
+    cache_key = _dept_stats_cache_key(event_id, scope)
     cached = await cache_get_json(cache_key)
     if cached is not None:
         return cached
@@ -222,11 +240,18 @@ async def get_stats_by_department(
     # Group by the snapshot, not the user's current department. Otherwise an
     # employee transferring between departments would retroactively move
     # their count out of the historical event's tally. (C6)
-    result = await db.execute(
+    query = (
         select(SafetyReport.department_snapshot, SafetyReport.status, func.count(SafetyReport.id))
         .where(SafetyReport.event_id == event_id)
-        .group_by(SafetyReport.department_snapshot, SafetyReport.status)
     )
+    if current_user.role != "admin":
+        # Manager's bar chart collapses to a single row for their own dept —
+        # we still return the list shape so the frontend's chart code stays
+        # role-agnostic.
+        query = query.where(SafetyReport.department_snapshot == current_user.department)
+    query = query.group_by(SafetyReport.department_snapshot, SafetyReport.status)
+
+    result = await db.execute(query)
     dept_data: dict[str, dict] = {}
     for dept, status, count in result.all():
         dept_name = dept or "Unknown"
