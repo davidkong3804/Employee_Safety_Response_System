@@ -207,30 +207,28 @@ jobs:
       - name: Prune — surplus load-test employees
         if: inputs.action == 'prune-users'
         run: |
-          # Same delete-then-apply pattern as db-init (Job specs are immutable).
-          kubectl -n "$NAMESPACE" delete job prune-users --ignore-not-found
-          kubectl apply -f k8s/05c-prune-users-job.yaml
+          # Run inside an existing backend pod instead of a new Job.
+          # Reason: NetworkPolicy only allows egress to postgres/redis/DNS for
+          # pods labelled app=backend. A new pod with app=prune-users would be
+          # blocked by the default-deny-all policy before it can reach the DB.
+          # kubectl exec reuses the pod's established network identity.
+          POD=$(kubectl -n "$NAMESPACE" get pod -l app=backend \
+            --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}')
 
-          if kubectl -n "$NAMESPACE" wait --for=condition=complete job/prune-users --timeout=300s; then
-            echo "✅ prune-users completed"
-          else
-            echo "❌ prune-users did not complete in 300s — dumping logs"
-            kubectl -n "$NAMESPACE" describe job prune-users | tail -30
-            kubectl -n "$NAMESPACE" logs job/prune-users --tail=100 || true
+          if [ -z "$POD" ]; then
+            echo "❌ No running backend pod found — is the backend deployment healthy?"
+            kubectl -n "$NAMESPACE" get pod -l app=backend
             exit 1
           fi
 
+          echo "Running prune on pod: $POD"
           echo
-          echo "::group::prune-users logs"
-          kubectl -n "$NAMESPACE" logs job/prune-users --tail=30
-          echo "::endgroup::"
+          kubectl -n "$NAMESPACE" exec "$POD" -- python -m app.prune_users --apply
 
           {
-            echo "### prune-users Job complete"
-            echo "Last 10 log lines:"
-            echo '```'
-            kubectl -n "$NAMESPACE" logs job/prune-users --tail=10
-            echo '```'
+            echo "### prune-users complete"
+            echo "Ran inside pod \`$POD\`"
           } >> $GITHUB_STEP_SUMMARY
 
       # --- optional rollout restart ------------------------------------
