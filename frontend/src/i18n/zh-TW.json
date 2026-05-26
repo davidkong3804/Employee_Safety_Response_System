@@ -1,7 +1,8 @@
 {
   "common": {
     "actions": "操作",
-    "status": "狀態"
+    "status": "狀態",
+    "retry": "重試"
   },
   "app": {
     "title": "企業安全回報系統",
@@ -30,6 +31,9 @@
     "message": "附加訊息（選填）",
     "submitted": "回報成功！",
     "failed": "回報失敗，請重試",
+    "failedNetwork": "網路不穩，請檢查連線後重試",
+    "failedServer": "伺服器暫時忙碌，請稍後再試",
+    "failedAmbiguous": "送出時發生錯誤，請回首頁確認狀態",
     "alreadyReported": "您已回報",
     "status": "您的狀態",
     "updateHint": "想更新狀態？再次選擇即可"
@@ -51,6 +55,7 @@
     "delete": "刪除事件",
     "statusLabel": "事件狀態",
     "noEvents": "目前無進行中的事件",
+    "loadError": "無法載入事件清單",
     "createdAt": "建立時間",
     "createSuccess": "事件建立成功",
     "createFailed": "事件建立失敗",

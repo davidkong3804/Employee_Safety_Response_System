@@ -37,7 +37,7 @@ describe('events API', () => {
     it('calls GET /api/events', async () => {
       mockedGet.mockResolvedValue({ data: [mockEvent] })
       await listEvents()
-      expect(mockedGet).toHaveBeenCalledWith('/api/events')
+      expect(mockedGet).toHaveBeenCalledWith('/api/events', undefined)
     })
 
     it('returns the event array unchanged', async () => {

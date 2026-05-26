@@ -1,7 +1,8 @@
 {
   "common": {
     "actions": "Actions",
-    "status": "Status"
+    "status": "Status",
+    "retry": "Retry"
   },
   "app": {
     "title": "Safety Response System",
@@ -30,6 +31,9 @@
     "message": "Additional message (optional)",
     "submitted": "Report submitted!",
     "failed": "Report failed, please retry",
+    "failedNetwork": "Connection unstable. Check your network and retry.",
+    "failedServer": "Server busy. Please try again shortly.",
+    "failedAmbiguous": "Submission error. Return to home to confirm your status.",
     "alreadyReported": "You have already reported",
     "status": "Your Status",
     "updateHint": "Want to update? Tap again."
@@ -51,6 +55,7 @@
     "delete": "Delete Event",
     "statusLabel": "Status",
     "noEvents": "No active events",
+    "loadError": "Failed to load events",
     "createdAt": "Created",
     "createSuccess": "Event created",
     "createFailed": "Failed to create event",

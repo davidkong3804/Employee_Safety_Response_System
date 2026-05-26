@@ -38,7 +38,7 @@ describe('reports API', () => {
     it('GETs /api/events/{id}/my-report', async () => {
       mockedGet.mockResolvedValue({ data: null })
       await getMyReport('ev-1')
-      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/my-report')
+      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/my-report', undefined)
     })
 
     it('passes through null when not yet reported', async () => {

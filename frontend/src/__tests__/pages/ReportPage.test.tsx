@@ -10,7 +10,7 @@ import type { Event, SafetyReport } from '../../types'
 vi.mock('../../api/events')
 vi.mock('../../api/reports')
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() },
 }))
 
 const mockedGetEvent = vi.mocked(eventsApi.getEvent)
@@ -130,7 +130,10 @@ describe('ReportPage', () => {
       await waitFor(() => screen.getByText("I'm Safe"))
       fireEvent.click(screen.getByText("I'm Safe"))
       await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith('Report failed, please retry'),
+        expect(toast.error).toHaveBeenCalledWith(
+          'Report failed, please retry',
+          { id: 'report-submit-error' },
+        ),
       )
     })
   })

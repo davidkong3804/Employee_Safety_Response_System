@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import axios from 'axios'
+import { AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react'
 import { listEvents } from '../../api/events'
 import { getMyReport } from '../../api/reports'
 import { getMyReminders, type MyReminder } from '../../api/reminders'
@@ -17,28 +18,48 @@ export default function Home() {
   const [events, setEvents] = useState<Event[]>([])
   const [myReports, setMyReports] = useState<Record<string, SafetyReport | null>>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<boolean>(false)
+  const [retryNonce, setRetryNonce] = useState(0)
   const [modalReminders, setModalReminders] = useState<MyReminder[] | null>(null)
 
-  // Re-fetch events (and per-event report status) whenever Home mounts or the
-  // user navigates back here. `location.key` changes on every navigation.
+  // Re-fetch events (and per-event report status) whenever Home mounts, the
+  // user navigates back here, or the user clicks "retry". `location.key`
+  // changes on every navigation; `retryNonce` is a manual bump.
   useEffect(() => {
+    const controller = new AbortController()
     setLoading(true)
-    listEvents().then(async (evts) => {
-      setEvents(evts)
-      const active = evts.filter(e => e.status === 'active')
-      const pairs = await Promise.all(
-        active.map(async (ev) => {
-          try {
-            const rpt = await getMyReport(ev.id)
-            return [ev.id, rpt] as [string, SafetyReport | null]
-          } catch {
-            return [ev.id, null] as [string, null]
-          }
-        })
-      )
-      setMyReports(Object.fromEntries(pairs))
-    }).finally(() => setLoading(false))
-  }, [location.key])
+    setLoadError(false)
+    ;(async () => {
+      try {
+        const evts = await listEvents({ signal: controller.signal })
+        if (controller.signal.aborted) return
+        setEvents(evts)
+        const active = evts.filter(e => e.status === 'active')
+        const pairs = await Promise.all(
+          active.map(async (ev) => {
+            try {
+              const rpt = await getMyReport(ev.id, { signal: controller.signal })
+              return [ev.id, rpt] as [string, SafetyReport | null]
+            } catch {
+              return [ev.id, null] as [string, null]
+            }
+          })
+        )
+        if (controller.signal.aborted) return
+        setMyReports(Object.fromEntries(pairs))
+      } catch (err) {
+        if (axios.isCancel(err) || controller.signal.aborted) return
+        // Don't drop into the "no events" empty state — surface the real
+        // failure so the employee knows to retry instead of assuming all-clear.
+        setEvents([])
+        setMyReports({})
+        setLoadError(true)
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    })()
+    return () => controller.abort()
+  }, [location.key, retryNonce])
 
   // Show the reminder modal ONCE per login, on the first visit to Home.
   // The flag is set by AuthContext.login() and cleared here after one read.
@@ -165,7 +186,22 @@ export default function Home() {
         </div>
       )}
 
-      {events.length === 0 && (
+      {loadError && (
+        <div className="text-center py-16">
+          <AlertTriangle className="w-16 h-16 mx-auto mb-4 text-red-500" />
+          <p className="text-lg text-red-700 font-medium mb-4">{t('event.loadError')}</p>
+          <button
+            type="button"
+            onClick={() => setRetryNonce(n => n + 1)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-900 text-white rounded-lg font-medium hover:bg-blue-800 transition"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
+
+      {!loadError && events.length === 0 && (
         <div className="text-center py-16 text-gray-400">
           <CheckCircle className="w-16 h-16 mx-auto mb-4" />
           <p className="text-lg">{t('event.noEvents')}</p>

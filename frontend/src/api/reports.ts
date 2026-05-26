@@ -18,8 +18,8 @@ export async function submitReport(eventId: string, payload: { status: string; m
   return data as SafetyReport
 }
 
-export async function getMyReport(eventId: string) {
-  const { data } = await client.get(`/api/events/${eventId}/my-report`)
+export async function getMyReport(eventId: string, config?: { signal?: AbortSignal }) {
+  const { data } = await client.get(`/api/events/${eventId}/my-report`, config)
   return data as SafetyReport | null
 }
 
