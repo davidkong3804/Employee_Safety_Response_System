@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import toast from 'react-hot-toast'
@@ -17,6 +17,10 @@ export default function ReportPage() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
+  // Synchronous lock against double-submits. `loading` alone is unreliable
+  // because React batches state updates — a fast second click can fire
+  // before disabled={loading} reaches the DOM.
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     if (!eventId) return
@@ -31,6 +35,8 @@ export default function ReportPage() {
 
   const handleReport = async (status: 'safe' | 'need_help') => {
     if (!eventId) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
     try {
       const report = await submitReport(eventId, { status, message: message || undefined })
@@ -40,9 +46,12 @@ export default function ReportPage() {
       // updated event list / reminder banner state. Home keys off
       // location.key so the events list re-fetches.
       navigate('/', { state: { refresh: true } })
+      // Keep submittingRef locked — we've already navigated away.
+      // The component will unmount and ref state doesn't matter.
     } catch {
       toast.error(t('report.failed'))
-    } finally {
+      // Only unlock on failure so the user can retry.
+      submittingRef.current = false
       setLoading(false)
     }
   }
