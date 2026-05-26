@@ -190,12 +190,16 @@ async def get_my_report(
     response = _report_to_response(report)
     if buffered:
         # Overlay the not-yet-flushed data so the caller sees what they just wrote.
-        response.status = buffered["status"]
-        response.message = buffered.get("message") or response.message
+        # Use model_copy to avoid mutating a Pydantic model instance in-place.
         try:
-            response.reported_at = datetime.fromisoformat(buffered["reported_at"])
+            reported_at_val = datetime.fromisoformat(buffered["reported_at"])
         except (KeyError, ValueError):
-            pass
+            reported_at_val = response.reported_at
+        response = response.model_copy(update={
+            "status": buffered["status"],
+            "message": buffered.get("message") or response.message,
+            "reported_at": reported_at_val,
+        })
     return response
 
 

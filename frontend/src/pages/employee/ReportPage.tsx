@@ -75,10 +75,14 @@ export default function ReportPage() {
         <div className="text-center py-12">
           <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
           <p className="text-lg font-medium text-gray-700 mb-2">{t('report.alreadyReported')}</p>
-          <p className="text-gray-500 mb-4">{t('report.status')}:</p>
-          <StatusBadge status={myReport!.status} size="md" />
-          {myReport?.message && (
-            <p className="mt-4 text-gray-600 bg-gray-50 rounded-lg p-3">{myReport.message}</p>
+          {myReport?.status && (
+            <>
+              <p className="text-gray-500 mb-4">{t('report.status')}:</p>
+              <StatusBadge status={myReport.status} size="md" />
+              {myReport.message && (
+                <p className="mt-4 text-gray-600 bg-gray-50 rounded-lg p-3">{myReport.message}</p>
+              )}
+            </>
           )}
         </div>
       ) : (
