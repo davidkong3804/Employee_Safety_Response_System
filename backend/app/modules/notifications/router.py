@@ -34,14 +34,25 @@ async def trigger_reminders(
     #    pruned accounts (e.g. surplus load-test employees removed via
     #    prune-users) don't get reminded — matching the event-creation
     #    logic in events/router.py which also filters by is_active.
+    #
+    #    Scope by role: admin sees the whole event; a manager can only
+    #    remind their own department (department_snapshot, not the live
+    #    user.department, so a transferred employee stays in the
+    #    historical event's scope — mirrors get_team_status in
+    #    reports/router.py). Prevents one manager spamming every other
+    #    department's employees.
+    filters = [
+        SafetyReport.event_id == event_id,
+        SafetyReport.status.is_(None),
+        User.is_active.is_(True),
+    ]
+    if current_user.role != "admin":
+        filters.append(SafetyReport.department_snapshot == current_user.department)
+
     unreported_rows = await db.execute(
         select(SafetyReport.user_id)
         .join(User, SafetyReport.user_id == User.id)
-        .where(
-            SafetyReport.event_id == event_id,
-            SafetyReport.status.is_(None),
-            User.is_active.is_(True),
-        )
+        .where(*filters)
     )
     unreported_user_ids: list[UUID] = [row[0] for row in unreported_rows.all()]
     count = len(unreported_user_ids)

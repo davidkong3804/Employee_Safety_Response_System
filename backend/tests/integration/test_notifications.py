@@ -7,22 +7,24 @@ from app.modules.users.models import User
 
 @pytest.mark.integration
 class TestTriggerReminders:
-    async def test_all_unreported_users_get_reminded(
+    async def test_manager_reminds_own_department_unreported(
         self, client, manager_headers, active_event
     ):
+        # Manager (Engineering) reminds Engineering's unreported users only:
+        # manager + employee. Admin (IT) must NOT be reminded by this call.
         r = await client.post(
             f"/api/events/{active_event.id}/remind", headers=manager_headers
         )
         assert r.status_code == 200
         data = r.json()
-        assert data["reminded_count"] == 3
-        assert "3" in data["message"]
+        assert data["reminded_count"] == 2
+        assert "2" in data["message"]
 
     async def test_excludes_already_reported_users(
         self, client, manager_headers, employee_headers, active_event
     ):
         event_id = str(active_event.id)
-        # Employee reports first
+        # Employee (Engineering) reports first
         await client.post(
             f"/api/events/{event_id}/report",
             json={"status": "safe"},
@@ -31,7 +33,8 @@ class TestTriggerReminders:
         r = await client.post(
             f"/api/events/{event_id}/remind", headers=manager_headers
         )
-        assert r.json()["reminded_count"] == 2  # admin + manager still unreported
+        # Engineering scope minus already-reported employee → only manager left.
+        assert r.json()["reminded_count"] == 1
 
     async def test_reminder_count_increments_on_repeat(
         self, client, manager_headers, active_event
@@ -45,11 +48,17 @@ class TestTriggerReminders:
         assert len(reminders) > 0
         assert all(rem["reminder_count"] == 2 for rem in reminders)
 
-    async def test_admin_can_trigger_reminders(self, client, admin_headers, active_event):
+    async def test_admin_reminds_across_all_departments(
+        self, client, admin_headers, active_event
+    ):
+        # Admin sees the whole event — IT (admin) + Engineering (manager,
+        # employee) → 3. Confirms admin is not narrowed by the manager
+        # dept-scope rule.
         r = await client.post(
             f"/api/events/{active_event.id}/remind", headers=admin_headers
         )
         assert r.status_code == 200
+        assert r.json()["reminded_count"] == 3
 
     async def test_employee_cannot_trigger_reminders(
         self, client, employee_headers, active_event
@@ -87,8 +96,9 @@ class TestTriggerReminders:
         r = await client.post(
             f"/api/events/{active_event.id}/remind", headers=manager_headers
         )
-        # Still 3 (admin + manager + employee) — ghost must be excluded.
-        assert r.json()["reminded_count"] == 3
+        # Engineering scope = manager + employee = 2. Ghost (also Engineering
+        # but inactive) must be excluded by the User.is_active filter.
+        assert r.json()["reminded_count"] == 2
 
 
 @pytest.mark.integration
@@ -110,7 +120,8 @@ class TestGetReminders:
 
         r = await client.get(f"/api/events/{event_id}/reminders", headers=manager_headers)
         reminders = r.json()
-        assert len(reminders) == 3
+        # Manager triggered → only Engineering scope persisted (manager + employee).
+        assert len(reminders) == 2
         for rem in reminders:
             assert rem["reminder_count"] == 1
             assert rem["last_reminded"] is not None
