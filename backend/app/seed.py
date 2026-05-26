@@ -1,7 +1,9 @@
 import random
+import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
+from sqlalchemy import insert as sa_insert
 from sqlalchemy import select
 
 from app.database import async_session
@@ -200,16 +202,24 @@ async def seed_data():
 
                 missing = target_uids - existing_uids
                 if missing:
-                    session.add_all([
-                        SafetyReport(
-                            event_id=ev.id,
-                            user_id=uid,
-                            manager_id_snapshot=target_by_uid[uid][1],
-                            department_snapshot=target_by_uid[uid][2],
-                            facility_snapshot=target_by_uid[uid][3],
-                        )
-                        for uid in missing
-                    ])
+                    # Bulk INSERT via Core (executemany) — much faster than
+                    # session.add_all() + flush for the ~9k Fab14 top-up case.
+                    # Explicit `id` because executemany skips Python-side
+                    # column defaults (server_default still fires).
+                    await session.execute(
+                        sa_insert(SafetyReport),
+                        [
+                            {
+                                "id": _uuid.uuid4(),
+                                "event_id": ev.id,
+                                "user_id": uid,
+                                "manager_id_snapshot": target_by_uid[uid][1],
+                                "department_snapshot": target_by_uid[uid][2],
+                                "facility_snapshot": target_by_uid[uid][3],
+                            }
+                            for uid in missing
+                        ],
+                    )
                     topped_up += len(missing)
 
             await session.commit()

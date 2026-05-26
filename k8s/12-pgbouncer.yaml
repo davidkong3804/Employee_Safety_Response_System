@@ -72,6 +72,15 @@ spec:
       # so K8s would inject PGBOUNCER_PORT=tcp://<ip>:5432 which collides with the
       # Bitnami entrypoint's PGBOUNCER_PORT integer check.
       enableServiceLinks: false
+      # Spread the 2 pgbouncer pods across zones — if both ended up on
+      # the same node the whole DB path dies with that node.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: pgbouncer
       containers:
         - name: pgbouncer
           image: bitnamilegacy/pgbouncer:1.23.1

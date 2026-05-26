@@ -147,3 +147,88 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
+---
+# 6. Prometheus: scrape backend pods + reach the kube-apiserver for
+#    pod service discovery. Accept ingress on 9090 from Grafana (or any
+#    intra-namespace tooling).
+#
+#    The egress rule for the kube-apiserver is intentionally not pinned
+#    to a specific IP: GKE rotates the apiserver IP and we don't want a
+#    cluster upgrade to silently kill Prometheus's SD. Restricting to
+#    port 443 + Egress within the cluster CIDR is the practical limit
+#    short of switching to a CiliumNetworkPolicy (FQDN-aware).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: grafana
+      ports:
+        - port: 9090
+  egress:
+    # Scrape backend /metrics
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 8000
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # kube-apiserver for pod discovery (kubernetes_sd_configs). 443/tcp
+    # is the apiserver port; leaving `to` unrestricted is acceptable
+    # because Prometheus has no service account permissions to write
+    # anything — read-only on pods/services/endpoints (see 14-prometheus.yaml).
+    - ports:
+        - port: 443
+          protocol: TCP
+---
+# 7. Grafana: accept ingress on 3000 (kubectl port-forward + intra-cluster).
+#    Egress: Prometheus + DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # No `from` restriction: kubectl port-forward traffic looks like it
+    # comes from the node (kubelet), and NetworkPolicy on GKE Calico
+    # does not always allow kubelet→pod by default. Leaving this open
+    # is fine — Grafana is on a ClusterIP service, never exposed to the
+    # public Ingress.
+    - ports:
+        - port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - port: 9090
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

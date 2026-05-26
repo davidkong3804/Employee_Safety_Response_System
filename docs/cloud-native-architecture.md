@@ -268,15 +268,26 @@ asyncpg.exceptions.DuplicatePreparedStatementError:
 prepared statement "__asyncpg_stmt_4__" already exists
 ```
 
-症狀很狡猾：readiness probe 間歇 200/503，平常看不出來，壓力一上來才整片失敗。修法是**兩層 cache 都關掉**：
+症狀很狡猾：readiness probe 間歇 200/503，平常看不出來，壓力一上來才整片失敗。修法是**兩層 cache 都關掉**，但要走對路徑：
 
 ```python
+# WRONG — prepared_statement_cache_size 不是 create_async_engine 的 kwarg
+# create_async_engine(url, prepared_statement_cache_size=0, ...)  # TypeError!
+
+# 對的做法：dialect kwarg 走 URL query string
+url = settings.DATABASE_URL
+if "+asyncpg" in url and "prepared_statement_cache_size" not in url:
+    sep = "&" if "?" in url else "?"
+    url = f"{url}{sep}prepared_statement_cache_size=0"
+
 engine = create_async_engine(
     url,
-    prepared_statement_cache_size=0,     # SQLAlchemy asyncpg dialect cache
     connect_args={"statement_cache_size": 0},  # asyncpg driver cache
 )
 ```
+
+- `statement_cache_size` 是 **asyncpg driver** 的 kwarg → 走 `connect_args`
+- `prepared_statement_cache_size` 是 **SQLAlchemy asyncpg dialect** 的 `__init__` kwarg → 必須走 URL query string
 
 僅設 `statement_cache_size=0` **不夠** — SQLAlchemy dialect 那層 cache 預設 100。
 

@@ -1,0 +1,254 @@
+# Prometheus — scrapes the backend `/metrics` endpoint via Kubernetes
+# pod service discovery. Annotation-driven: any pod with
+# `prometheus.io/scrape: "true"` (already set on backend pods in
+# 06-backend.yaml) gets picked up automatically, so HPA scale-ups don't
+# need any extra configuration here.
+#
+# This is the **in-cluster** Prometheus — separate from GKE's Managed
+# Prometheus. Pick one:
+#   - Managed Prometheus: scrapes via `prometheus.io/*` annotations and
+#     pipes into Cloud Monitoring. No extra resources, but harder to
+#     query interactively without enabling the (separate) Managed
+#     Prometheus query endpoint.
+#   - This in-cluster Prometheus: self-contained, queryable via
+#     `kubectl port-forward svc/prometheus 9090:9090`, no GCP product
+#     dependency. Ideal for demos / academic deployment.
+#
+# Storage is ephemeral (emptyDir) for simplicity — restart loses
+# history. Bump to a PVC if you need >1h retention across pod restarts.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: safety-system
+---
+# RBAC: pod discovery requires read access to nodes/pods/services across
+# the namespace. Scoped to the safety-system namespace (Role, not
+# ClusterRole) — we only ever scrape this app's pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus
+  namespace: safety-system
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus
+  namespace: safety-system
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: safety-system
+roleRef:
+  kind: Role
+  name: prometheus
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: safety-system
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: safety-response
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      # Auto-discover backend pods via annotations. Equivalent to the
+      # docker-compose static_configs target, but survives HPA churn.
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: [safety-system]
+        relabel_configs:
+          # Only scrape pods that opt in via annotation.
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          # Use the path annotation if present, else default to /metrics.
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # Use the port annotation if present, replacing the default port.
+          - source_labels:
+              [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          # Promote useful labels to time-series labels.
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          # Backend pods don't set the `job` label — pretend they do, so
+          # the existing alert rules and Grafana panels keep working.
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: backend
+            target_label: job
+            replacement: safety-response-backend
+---
+# Rules: mirror monitoring/prometheus-rules.yml. Kept in a separate
+# ConfigMap so editing alerts doesn't churn the prometheus.yml hash and
+# trigger an unnecessary reload.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: safety-system
+data:
+  alerts.yml: |
+    groups:
+      - name: safety-response-alerts
+        rules:
+          - alert: HighErrorRate
+            expr: |
+              sum(rate(http_requests_total{job="safety-response-backend", status="5xx"}[1m]))
+              /
+              sum(rate(http_requests_total{job="safety-response-backend"}[1m])) > 0.05
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High 5xx error rate (>5%)"
+              description: "5xx error rate is {{ $value | humanizePercentage }} over the last minute."
+
+          - alert: HighLatency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket{job="safety-response-backend"}[1m])) by (le)
+              ) > 1.0
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High p95 response time (>1s)"
+              description: "p95 latency is {{ $value | humanizeDuration }}."
+
+          - alert: BackendDown
+            expr: up{job="safety-response-backend"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Backend is down"
+              description: "Prometheus cannot scrape the backend /metrics endpoint."
+
+          - alert: High4xxRate
+            expr: |
+              sum(rate(http_requests_total{job="safety-response-backend", status="4xx"}[1m]))
+              /
+              sum(rate(http_requests_total{job="safety-response-backend"}[1m])) > 0.20
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High 4xx error rate (>20%)"
+              description: "4xx error rate is {{ $value | humanizePercentage }}."
+
+          # New: pod-level OOM / restart detection. Prometheus picks this
+          # up from kube-state-metrics if installed; harmless if not (no
+          # series → alert never fires).
+          - alert: BackendPodRestarting
+            expr: increase(kube_pod_container_status_restarts_total{namespace="safety-system", container="backend"}[5m]) > 2
+            for: 0m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Backend pod restarting frequently"
+              description: "Pod {{ $labels.pod }} restarted {{ $value }} times in 5m."
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: safety-system
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: safety-system
+spec:
+  replicas: 1
+  strategy:
+    # Recreate (not RollingUpdate): emptyDir storage means two pods would
+    # split the time-series anyway, and Prometheus is a single-writer
+    # process. One pod up at a time keeps queries consistent.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534          # nobody — matches the prom/prometheus image
+        runAsGroup: 65534
+        fsGroup: 65534            # so the emptyDir is writable
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.55.1
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=6h
+            - --web.console.libraries=/etc/prometheus/console_libraries
+            - --web.console.templates=/etc/prometheus/consoles
+            - --web.enable-lifecycle  # POST /-/reload triggers config reread
+          ports:
+            - name: web
+              containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /-/ready, port: 9090 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /-/healthy, port: 9090 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus/prometheus.yml, subPath: prometheus.yml }
+            - { name: rules,  mountPath: /etc/prometheus/rules }
+            - { name: data,   mountPath: /prometheus }
+      volumes:
+        - name: config
+          configMap: { name: prometheus-config }
+        - name: rules
+          configMap: { name: prometheus-rules }
+        - name: data
+          emptyDir: {}

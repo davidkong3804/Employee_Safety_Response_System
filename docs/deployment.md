@@ -123,7 +123,41 @@ A Job spec is immutable. To re-run after a change:
 ```bash
 kubectl -n safety-system delete job db-init
 kubectl apply -f k8s/05-db-init-job.yaml
+kubectl -n safety-system wait --for=condition=complete job/db-init --timeout=180s
 ```
+
+### ⚠️ Schema migrations — mandatory after code changes that add DB columns
+
+`apply_pending_migrations()` in `init_db.py` uses `ADD COLUMN IF NOT EXISTS`
+to safely add new columns to existing tables. SQLAlchemy's `create_all` only
+creates *new* tables — it never alters existing ones — so **any new column in a
+model must also appear in `apply_pending_migrations()`, and db-init must be
+re-run before pods rolling-deploy with the new code**.
+
+**Symptom when skipped:** every endpoint that SELECTs a full ORM row returns
+HTTP 500 with `column "xyz" does not exist`. Load tests will show 40–70%
+failure rates.
+
+**Checklist for schema changes:**
+
+1. Add `ADD COLUMN IF NOT EXISTS` block to `apply_pending_migrations()` in
+   `backend/app/init_db.py`.
+2. Merge to `main` — CI builds and pushes the new backend image.
+3. Re-run db-init **before** rolling the new pods:
+   ```bash
+   kubectl -n safety-system delete job db-init --ignore-not-found
+   kubectl apply -f k8s/05-db-init-job.yaml
+   kubectl -n safety-system wait --for=condition=complete job/db-init --timeout=180s
+   ```
+4. Now roll the backend (CI does this automatically, or manually):
+   ```bash
+   kubectl -n safety-system rollout restart deployment/backend
+   kubectl -n safety-system rollout status  deployment/backend --timeout=180s
+   ```
+
+**Order matters:** migration before rollout. If pods restart first and the
+column is still missing, they will crash-loop on the first request that hits a
+snapshot column.
 
 ### Scaling
 
