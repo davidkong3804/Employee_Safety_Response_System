@@ -61,6 +61,23 @@ export default function Home() {
     return () => controller.abort()
   }, [location.key, retryNonce])
 
+  // Auto-refresh events while the user sits on Home — covers two real-world
+  // gaps: (1) admin creates a new event while the employee is already on this
+  // page, (2) the user returns to the tab and expects up-to-date state. A
+  // 15s tick is well below the typical "drill announcement → employee opens
+  // app" lag, and `retryNonce` reuses the existing fetch path (so we don't
+  // duplicate logic). Re-fetch on `focus` covers the "tab in background for
+  // an hour" case instantly without waiting for the next tick.
+  useEffect(() => {
+    const tick = () => setRetryNonce(n => n + 1)
+    const interval = setInterval(tick, 15000)
+    window.addEventListener('focus', tick)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', tick)
+    }
+  }, [])
+
   // Show the reminder modal ONCE per login, on the first visit to Home.
   // The flag is set by AuthContext.login() and cleared here after one read.
   useEffect(() => {
