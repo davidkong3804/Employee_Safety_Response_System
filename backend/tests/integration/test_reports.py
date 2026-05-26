@@ -190,20 +190,182 @@ class TestTeamStatus:
             f"/api/events/{active_event.id}/team-status", headers=admin_headers
         )
         assert r.status_code == 200
-        assert len(r.json()) == 3  # all 3 test users
+        data = r.json()
+        assert data["total"] == 3
+        assert len(data["items"]) == 3
 
-    async def test_manager_sees_only_subordinates_and_self(
+    async def test_manager_sees_own_department_employees(
         self, client, manager_headers, manager_user, employee_user, admin_user, active_event
     ):
         r = await client.get(
             f"/api/events/{active_event.id}/team-status", headers=manager_headers
         )
         assert r.status_code == 200
-        reports = r.json()
-        user_ids = {rep["user_id"] for rep in reports}
-        assert str(manager_user.id) in user_ids
-        assert str(employee_user.id) in user_ids
-        assert str(admin_user.id) not in user_ids  # admin not under this manager
+        items = r.json()["items"]
+        user_ids = {rep["user_id"] for rep in items}
+        assert str(manager_user.id) in user_ids       # self
+        assert str(employee_user.id) in user_ids      # same dept (Engineering)
+        assert str(admin_user.id) not in user_ids     # different dept (IT)
+
+    async def test_manager_sees_dept_employee_even_if_not_direct_report(
+        self, client, manager_headers, manager_user, admin_user, db_session, active_event
+    ):
+        # Engineering employee whose manager is the ADMIN, not manager_user.
+        # Old behaviour (manager_id_snapshot scope) would have hidden them;
+        # new dept-scope must show them.
+        from app.modules.auth.router import hash_password as _hash
+        from app.modules.reports.models import SafetyReport
+        from app.modules.users.models import User
+
+        other = User(
+            employee_id="TEST_E_OTHER_BOSS",
+            name="Other Boss Engineer",
+            email="other.boss@example.com",
+            password_hash=_hash("testpassword"),
+            role="employee",
+            department="Engineering",
+            facility="TestFab",
+            manager_id=admin_user.id,  # not manager_user
+            is_active=True,
+        )
+        db_session.add(other)
+        await db_session.flush()
+        db_session.add(SafetyReport(
+            event_id=active_event.id,
+            user_id=other.id,
+            manager_id_snapshot=other.manager_id,
+            department_snapshot=other.department,
+            facility_snapshot=other.facility,
+        ))
+        await db_session.flush()
+
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status", headers=manager_headers
+        )
+        ids = {rep["user_id"] for rep in r.json()["items"]}
+        assert str(other.id) in ids
+
+    async def test_manager_does_not_see_other_departments(
+        self, client, manager_headers, manager_user, db_session, active_event
+    ):
+        from app.modules.auth.router import hash_password as _hash
+        from app.modules.reports.models import SafetyReport
+        from app.modules.users.models import User
+
+        # Same manager_id as manager_user — but different department. Scope
+        # is dept-based now, so this row must be excluded.
+        other = User(
+            employee_id="TEST_E_SALES",
+            name="Sales Person",
+            email="sales@example.com",
+            password_hash=_hash("testpassword"),
+            role="employee",
+            department="Sales",
+            facility="TestFab",
+            manager_id=manager_user.id,
+            is_active=True,
+        )
+        db_session.add(other)
+        await db_session.flush()
+        db_session.add(SafetyReport(
+            event_id=active_event.id,
+            user_id=other.id,
+            manager_id_snapshot=other.manager_id,
+            department_snapshot=other.department,  # "Sales"
+            facility_snapshot=other.facility,
+        ))
+        await db_session.flush()
+
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status", headers=manager_headers
+        )
+        ids = {rep["user_id"] for rep in r.json()["items"]}
+        assert str(other.id) not in ids
+
+    async def test_pagination_returns_correct_slice_and_total(
+        self, client, admin_headers, manager_user, db_session, active_event
+    ):
+        from sqlalchemy import select as _select
+
+        from app.modules.auth.router import hash_password as _hash
+        from app.modules.reports.models import SafetyReport
+        from app.modules.users.models import User
+
+        # 3 existing + 100 bulk = 103 placeholders for this event
+        for i in range(100):
+            db_session.add(User(
+                employee_id=f"TEST_E_BULK_{i:03d}",
+                name=f"Bulk Employee {i:03d}",
+                email=f"bulk{i:03d}@example.com",
+                password_hash=_hash("testpassword"),
+                role="employee",
+                department="Engineering",
+                facility="TestFab",
+                manager_id=manager_user.id,
+                is_active=True,
+            ))
+        await db_session.flush()
+        bulk_users = (await db_session.execute(
+            _select(User).where(User.employee_id.like("TEST_E_BULK_%"))
+        )).scalars().all()
+        for u in bulk_users:
+            db_session.add(SafetyReport(
+                event_id=active_event.id,
+                user_id=u.id,
+                manager_id_snapshot=u.manager_id,
+                department_snapshot=u.department,
+                facility_snapshot=u.facility,
+            ))
+        await db_session.flush()
+
+        # First page
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status?limit=40&offset=0",
+            headers=admin_headers,
+        )
+        data = r.json()
+        assert data["total"] == 103
+        assert data["limit"] == 40
+        assert data["offset"] == 0
+        assert len(data["items"]) == 40
+
+        # Last partial page: 103 - 80 = 23 rows
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status?limit=40&offset=80",
+            headers=admin_headers,
+        )
+        data = r.json()
+        assert data["total"] == 103
+        assert len(data["items"]) == 23
+
+    async def test_status_filter_unreported_excludes_submitted(
+        self, client, admin_headers, employee_headers, active_event
+    ):
+        await client.post(
+            f"/api/events/{active_event.id}/report",
+            json={"status": "safe"},
+            headers=employee_headers,
+        )
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status?status=unreported",
+            headers=admin_headers,
+        )
+        data = r.json()
+        # admin + manager remain unreported; employee submitted safe
+        assert data["total"] == 2
+        statuses = {item["status"] for item in data["items"]}
+        assert statuses == {None}
+
+    async def test_search_filters_by_employee_id(
+        self, client, admin_headers, employee_user, active_event
+    ):
+        r = await client.get(
+            f"/api/events/{active_event.id}/team-status?search=TEST_E001",
+            headers=admin_headers,
+        )
+        data = r.json()
+        assert data["total"] == 1
+        assert data["items"][0]["employee_id"] == "TEST_E001"
 
     async def test_employee_cannot_see_team_status(
         self, client, employee_headers, active_event
@@ -221,7 +383,8 @@ class TestAllStatus:
             f"/api/events/{active_event.id}/all-status", headers=admin_headers
         )
         assert r.status_code == 200
-        assert len(r.json()) == 3
+        assert r.json()["total"] == 3
+        assert len(r.json()["items"]) == 3
 
     async def test_filter_by_facility(self, client, admin_headers, active_event):
         r = await client.get(
@@ -229,8 +392,7 @@ class TestAllStatus:
             headers=admin_headers,
         )
         assert r.status_code == 200
-        # All 3 test users have facility=TestFab
-        assert len(r.json()) == 3
+        assert len(r.json()["items"]) == 3
 
     async def test_filter_by_unknown_facility_returns_empty(
         self, client, admin_headers, active_event
@@ -240,7 +402,9 @@ class TestAllStatus:
             headers=admin_headers,
         )
         assert r.status_code == 200
-        assert r.json() == []
+        data = r.json()
+        assert data["items"] == []
+        assert data["total"] == 0
 
     async def test_manager_cannot_see_all_status(
         self, client, manager_headers, active_event
@@ -259,37 +423,36 @@ class TestOrgSnapshotIsolation:
     org context.
     """
 
-    async def test_team_status_stable_when_employee_changes_manager(
+    async def test_team_status_stable_when_employee_changes_department(
         self,
         client,
         manager_headers,
         manager_user,
         employee_user,
-        admin_user,
         db_session,
         active_event,
     ):
-        # Before the org change: the employee shows up under the manager.
+        # Before any change: the employee shows up in the manager's view.
         r = await client.get(
             f"/api/events/{active_event.id}/team-status", headers=manager_headers
         )
         assert r.status_code == 200
-        before_ids = {rep["user_id"] for rep in r.json()}
+        before_ids = {rep["user_id"] for rep in r.json()["items"]}
         assert str(employee_user.id) in before_ids
 
-        # Now reassign the employee away from this manager (e.g. transferred
-        # to the admin — any other manager-or-admin id would do).
-        employee_user.manager_id = admin_user.id
+        # Move the employee out of Engineering — only their *live* department
+        # changes; the placeholder's department_snapshot stays "Engineering".
+        employee_user.department = "Sales"
         await db_session.flush()
 
-        # The historical event must STILL show the employee under the
-        # original manager because manager_id_snapshot was frozen at
-        # placeholder-creation time.
+        # Manager scope is dept-based, but it reads department_snapshot
+        # (frozen), not live user.department — so the historical view is
+        # unchanged.
         r = await client.get(
             f"/api/events/{active_event.id}/team-status", headers=manager_headers
         )
         assert r.status_code == 200
-        after_ids = {rep["user_id"] for rep in r.json()}
+        after_ids = {rep["user_id"] for rep in r.json()["items"]}
         assert before_ids == after_ids
         assert str(employee_user.id) in after_ids
 
@@ -342,7 +505,7 @@ class TestOrgSnapshotIsolation:
             f"/api/events/{active_event.id}/all-status?facility=TestFab",
             headers=admin_headers,
         )
-        before_count = len(r.json())
+        before_count = len(r.json()["items"])
         assert before_count == 3
 
         # Move the employee to a different facility post-event.
@@ -354,11 +517,11 @@ class TestOrgSnapshotIsolation:
             f"/api/events/{active_event.id}/all-status?facility=TestFab",
             headers=admin_headers,
         )
-        assert len(r.json()) == before_count
+        assert len(r.json()["items"]) == before_count
         # And a filter on the new facility returns nothing — the snapshot
         # was TestFab, not OtherFab.
         r = await client.get(
             f"/api/events/{active_event.id}/all-status?facility=OtherFab",
             headers=admin_headers,
         )
-        assert r.json() == []
+        assert r.json()["items"] == []

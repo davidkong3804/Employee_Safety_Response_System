@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CheckCircle, Clock, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import { listEvents } from '../../api/events'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Event } from '../../types'
@@ -84,13 +84,6 @@ export default function Home() {
                     className="flex-1 text-center py-3 bg-blue-900 text-white rounded-lg font-medium hover:bg-blue-800 transition text-lg"
                   >
                     {t('report.title')}
-                  </Link>
-                  <Link
-                    to={`/events/${event.id}/peers`}
-                    className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition"
-                  >
-                    <Users className="w-5 h-5" />
-                    {t('peers.title')}
                   </Link>
                 </div>
               </div>

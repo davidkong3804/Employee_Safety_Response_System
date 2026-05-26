@@ -39,3 +39,10 @@ class DepartmentStats(BaseModel):
     safe: int
     need_help: int
     unreported: int
+
+
+class PaginatedReports(BaseModel):
+    items: list[ReportResponse]
+    total: int
+    limit: int
+    offset: int
