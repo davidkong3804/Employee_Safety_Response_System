@@ -224,12 +224,6 @@ async def drain_event_buffer(event_id: str) -> int:
             pipe.hgetall(f"buf:report:{event_id}:{uid}")
         raw_results = await pipe.execute()
 
-        # Delete the buf keys we just read.
-        del_pipe = client.pipeline()
-        for uid in user_id_list:
-            del_pipe.delete(f"buf:report:{event_id}:{uid}")
-        await del_pipe.execute()
-
         records = [
             {
                 "user_id": uid,
@@ -244,7 +238,22 @@ async def drain_event_buffer(event_id: str) -> int:
         if not records:
             return 0
 
+        # Write to DB FIRST, then clear the buffer. The earlier order (delete
+        # buffer, then UPDATE) opened a read-after-drain window: between the
+        # delete and the commit, get_my_report saw buffered=None AND DB
+        # status=NULL, so the employee's "報告已回報" UI flipped back to the
+        # "回報狀態" buttons mid-drain. By delaying the buf:report:* deletes
+        # until after the DB commit, get_my_report's overlay still finds the
+        # buffered value (which matches what we just wrote to DB) — no
+        # null-window flicker.
         count = await _batch_update_db(event_id, records)
+
+        # Now safe to clear the per-user buf keys we just drained.
+        del_pipe = client.pipeline()
+        for uid in user_id_list:
+            del_pipe.delete(f"buf:report:{event_id}:{uid}")
+        await del_pipe.execute()
+
         # Invalidate stats cache once per drain cycle, not once per report.
         await cache_invalidate_pattern(f"stats:event:{event_id}:*")
         return count

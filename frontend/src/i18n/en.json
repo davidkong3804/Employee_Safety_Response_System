@@ -31,7 +31,8 @@
     "submitted": "Report submitted!",
     "failed": "Report failed, please retry",
     "alreadyReported": "You have already reported",
-    "status": "Your Status"
+    "status": "Your Status",
+    "updateHint": "Want to update? Tap again."
   },
   "status": {
     "safe": "Safe",

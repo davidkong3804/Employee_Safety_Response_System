@@ -31,7 +31,8 @@
     "submitted": "回報成功！",
     "failed": "回報失敗，請重試",
     "alreadyReported": "您已回報",
-    "status": "您的狀態"
+    "status": "您的狀態",
+    "updateHint": "想更新狀態？再次選擇即可"
   },
   "status": {
     "safe": "安全",

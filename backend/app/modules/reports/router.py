@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
@@ -19,6 +20,8 @@ from app.modules.reports.schemas import (
     ReportSubmit,
 )
 from app.modules.users.models import User
+
+log = logging.getLogger(__name__)
 
 StatusFilter = Literal["safe", "need_help", "unreported"]
 
@@ -117,6 +120,10 @@ async def submit_report(
         message=data.message or "",
         reported_at=now_utc.isoformat(),
     )
+    log.info(
+        "submit_report event=%s user=%s status=%s buffered=%s",
+        event_id, current_user.id, data.status, buffered,
+    )
 
     # Always SELECT the placeholder — needed for report.id in the response
     # and to preserve the 404 semantic when the user is not in the event.
@@ -184,6 +191,12 @@ async def get_my_report(
         )
     )
     report = result.scalar_one_or_none()
+    log.info(
+        "get_my_report event=%s user=%s buffered_status=%s db_status=%s",
+        event_id, current_user.id,
+        (buffered or {}).get("status"),
+        report.status if report else None,
+    )
     if not report:
         return None
 
