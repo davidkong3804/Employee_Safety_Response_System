@@ -125,6 +125,10 @@
     "reportByEvent": "各事件回報狀態",
     "overallDistribution": "整體狀態分佈"
   },
+  "reminder": {
+    "banner": "主管提醒您尚未回報事件「{{event}}」，請立即前往回報",
+    "bannerMulti": "主管提醒您有 {{count}} 件事件尚未回報，請立即前往回報"
+  },
   "facility": {
     "selectFacilities": "選擇受影響廠區",
     "taiwan": "台灣",

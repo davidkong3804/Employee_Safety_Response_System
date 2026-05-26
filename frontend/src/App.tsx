@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
+import ReminderBanner from './components/ReminderBanner'
 import Login from './pages/Login'
 import Home from './pages/employee/Home'
 import ReportPage from './pages/employee/ReportPage'
@@ -16,6 +17,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
+      <ReminderBanner />
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
 

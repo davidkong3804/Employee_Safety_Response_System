@@ -10,7 +10,12 @@ from app.config import settings
 from app.database import engine
 from app.modules.auth.router import router as auth_router
 from app.modules.events.router import router as events_router
-from app.modules.notifications.router import router as notifications_router
+from app.modules.notifications.router import (
+    me_router as me_notifications_router,
+)
+from app.modules.notifications.router import (
+    router as notifications_router,
+)
 from app.modules.reports.router import router as reports_router
 from app.modules.users.router import router as users_router
 
@@ -46,6 +51,7 @@ app.include_router(events_router)
 app.include_router(reports_router)
 app.include_router(users_router)
 app.include_router(notifications_router)
+app.include_router(me_notifications_router)
 
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
