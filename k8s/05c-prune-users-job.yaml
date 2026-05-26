@@ -1,0 +1,45 @@
+# One-shot pruner: deletes employee accounts whose numeric suffix exceeds
+# LOAD_TEST_MAX_EMPLOYEES (defined in backend/app/seed.py). Use this after
+# lowering the cap (e.g. 15000 → 500) so the DB matches the new config.
+#
+# Safe to re-run: if nothing exceeds the cap, the script prints
+# "Nothing to prune" and exits 0.
+#
+# Trigger via the k8s-ops.yml workflow (action: prune-users), or manually:
+#   kubectl -n safety-system delete job prune-users --ignore-not-found
+#   kubectl apply -f k8s/05c-prune-users-job.yaml
+#   kubectl -n safety-system wait --for=condition=complete job/prune-users --timeout=300s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prune-users
+  namespace: safety-system
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: prune-users
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: prune-users
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/backend:latest
+          imagePullPolicy: Always
+          command: ["python", "-m", "app.prune_users", "--apply"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
