@@ -127,7 +127,12 @@
   },
   "reminder": {
     "banner": "主管提醒您尚未回報事件「{{event}}」，請立即前往回報",
-    "bannerMulti": "主管提醒您有 {{count}} 件事件尚未回報，請立即前往回報"
+    "bannerMulti": "主管提醒您有 {{count}} 件事件尚未回報，請立即前往回報",
+    "modalTitle": "您有未回報的事件",
+    "modalBody": "主管提醒您尚未回報事件「{{event}}」，請立即前往回報。",
+    "modalBodyMulti": "主管提醒您有 {{count}} 件事件尚未回報，請立即前往回報。",
+    "modalGoReport": "立即前往回報",
+    "modalLater": "稍後再說"
   },
   "facility": {
     "selectFacilities": "選擇受影響廠區",

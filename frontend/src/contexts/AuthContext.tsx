@@ -30,6 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (employeeId: string, password: string): Promise<User> => {
     const { access_token } = await apiLogin(employeeId, password)
     localStorage.setItem('token', access_token)
+    // Flag so the next visit to Home shows the reminder modal once (if the
+    // user has unreported reminders). Cleared by Home after it shows, or by
+    // logout. sessionStorage is per-tab so a fresh tab gets a fresh modal.
+    sessionStorage.setItem('reminder-modal-pending', '1')
     const me = await getMe()
     setUser(me)
     return me
@@ -37,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem('token')
+    sessionStorage.removeItem('reminder-modal-pending')
     setUser(null)
   }
 
