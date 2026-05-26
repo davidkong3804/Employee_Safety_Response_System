@@ -36,6 +36,10 @@ export default function ReportPage() {
       const report = await submitReport(eventId, { status, message: message || undefined })
       setMyReport(report)
       toast.success(t('report.submitted'))
+      // Auto-refresh: hop back to Home so the user immediately sees the
+      // updated event list / reminder banner state. Home keys off
+      // location.key so the events list re-fetches.
+      navigate('/', { state: { refresh: true } })
     } catch {
       toast.error(t('report.failed'))
     } finally {

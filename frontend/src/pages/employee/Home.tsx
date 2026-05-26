@@ -1,20 +1,44 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import { listEvents } from '../../api/events'
+import { getMyReminders, type MyReminder } from '../../api/reminders'
 import { useAuth } from '../../contexts/AuthContext'
+import ReminderModal from '../../components/ReminderModal'
 import type { Event } from '../../types'
 
 export default function Home() {
   const { t } = useTranslation()
   const { user } = useAuth()
+  const location = useLocation()
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [modalReminders, setModalReminders] = useState<MyReminder[] | null>(null)
 
+  // Re-fetch events whenever Home mounts OR ReportPage navigates back with
+  // `{ state: { refresh: true } }` after a successful report. `location.key`
+  // changes on every navigation so this also covers re-entering from any
+  // other page.
   useEffect(() => {
+    setLoading(true)
     listEvents().then(setEvents).finally(() => setLoading(false))
-  }, [])
+  }, [location.key])
+
+  // Show the reminder modal ONCE per login, on the first visit to Home.
+  // The flag is set by AuthContext.login() and cleared here after one read.
+  useEffect(() => {
+    if (!user || user.role !== 'employee') return
+    if (sessionStorage.getItem('reminder-modal-pending') !== '1') return
+    sessionStorage.removeItem('reminder-modal-pending')
+    getMyReminders()
+      .then((data) => {
+        if (data.length > 0) setModalReminders(data)
+      })
+      .catch(() => {
+        // Silent — modal just won't show. Banner will still cover it on poll.
+      })
+  }, [user])
 
   if (loading) {
     return (
@@ -116,6 +140,13 @@ export default function Home() {
           <CheckCircle className="w-16 h-16 mx-auto mb-4" />
           <p className="text-lg">{t('event.noEvents')}</p>
         </div>
+      )}
+
+      {modalReminders && (
+        <ReminderModal
+          reminders={modalReminders}
+          onClose={() => setModalReminders(null)}
+        />
       )}
     </div>
   )
