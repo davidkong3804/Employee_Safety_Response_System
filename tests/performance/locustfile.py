@@ -41,7 +41,7 @@ WARMUP_OVERFETCH_FACTOR = 2     # warm 2× VU count so random.choice has slack
 # 500. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
 # are auto-generated test accounts with 4-digit IDs.
 # ---------------------------------------------------------------------------
-LOAD_TEST_MAX_EMPLOYEES = 500
+LOAD_TEST_MAX_EMPLOYEES = 15000
 
 ADMIN_CREDS = {"employee_id": "A001", "password": "password123"}
 MANAGER_CREDS = [

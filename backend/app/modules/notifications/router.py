@@ -18,9 +18,12 @@ from app.modules.notifications.schemas import (
 )
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
+from app.rate_limiter import RedisRateLimiter
 
 router = APIRouter(prefix="/api/events", tags=["notifications"])
 me_router = APIRouter(prefix="/api/me", tags=["notifications"])
+
+remind_limiter = RedisRateLimiter(limit=3, window=60, action="remind")
 
 
 @router.post("/{event_id}/remind", response_model=ReminderTriggerResponse)
@@ -28,6 +31,7 @@ async def trigger_reminders(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
+    _: None = Depends(remind_limiter),
 ):
     # 1. Collect user_ids of employees who haven't reported yet AND are still
     #    active. JOIN with users so placeholder rows for deactivated /

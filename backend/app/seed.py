@@ -18,7 +18,7 @@ DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()
 # are auto-generated test accounts (E0031–E0500). Bump this number if
 # stress tests need more capacity — both seed.py and locustfile.py should
 # stay in sync.
-LOAD_TEST_MAX_EMPLOYEES = 500
+LOAD_TEST_MAX_EMPLOYEES = 15000
 
 
 async def seed_data():

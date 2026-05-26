@@ -20,8 +20,12 @@ from app.modules.reports.schemas import (
     ReportSubmit,
 )
 from app.modules.users.models import User
+from app.rate_limiter import RedisRateLimiter
 
 log = logging.getLogger(__name__)
+
+report_limiter = RedisRateLimiter(limit=5, window=10, action="report")
+
 
 StatusFilter = Literal["safe", "need_help", "unreported"]
 
@@ -112,6 +116,7 @@ async def submit_report(
     data: ReportSubmit,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _: None = Depends(report_limiter),
 ):
     if data.status not in ("safe", "need_help"):
         raise HTTPException(status_code=400, detail="Status must be 'safe' or 'need_help'")
