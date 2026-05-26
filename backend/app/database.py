@@ -69,4 +69,3 @@ async def get_read_db():
         except Exception:
             await session.rollback()
             raise
-

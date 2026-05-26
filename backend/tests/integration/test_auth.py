@@ -1,4 +1,5 @@
 """Integration tests for /api/auth/* endpoints."""
+
 import pytest
 
 

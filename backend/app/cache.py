@@ -23,6 +23,7 @@ Design notes
   calls reuse it. The connection is module-global so it lives for the
   process lifetime (lots of short-lived requests share one TCP socket).
 """
+
 from __future__ import annotations
 
 import json

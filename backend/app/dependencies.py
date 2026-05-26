@@ -23,7 +23,11 @@ async def _get_user_by_id(user_id: str, db: AsyncSession) -> User | None:
     if cached_user is not None:
         if "id" in cached_user and isinstance(cached_user["id"], str):
             cached_user["id"] = uuid.UUID(cached_user["id"])
-        if "manager_id" in cached_user and cached_user["manager_id"] is not None and isinstance(cached_user["manager_id"], str):
+        if (
+            "manager_id" in cached_user
+            and cached_user["manager_id"] is not None
+            and isinstance(cached_user["manager_id"], str)
+        ):
             cached_user["manager_id"] = uuid.UUID(cached_user["manager_id"])
         return User(**cached_user)
 
@@ -86,7 +90,6 @@ async def get_optional_user(
     return await _get_user_by_id(user_id, db)
 
 
-
 def require_role(*roles: str):
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
@@ -95,4 +98,5 @@ def require_role(*roles: str):
                 detail="Insufficient permissions",
             )
         return current_user
+
     return role_checker

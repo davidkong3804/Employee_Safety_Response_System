@@ -1,4 +1,5 @@
 """Integration tests for /api/events – core business logic."""
+
 import pytest
 from sqlalchemy import select
 
@@ -20,18 +21,30 @@ class TestListEvents:
 
         # Create a TestFab event (matches employee_user.facility)
         testfab_event = EventModel(
-            title="TestFab Event", event_type="earthquake", severity="high",
-            status="active", facility=["TestFab"], created_by=admin_user.id,
+            title="TestFab Event",
+            event_type="earthquake",
+            severity="high",
+            status="active",
+            facility=["TestFab"],
+            created_by=admin_user.id,
         )
         # Create an OtherFab event (should NOT be visible to employee)
         otherfab_event = EventModel(
-            title="OtherFab Event", event_type="fire", severity="low",
-            status="active", facility=["OtherFab"], created_by=admin_user.id,
+            title="OtherFab Event",
+            event_type="fire",
+            severity="low",
+            status="active",
+            facility=["OtherFab"],
+            created_by=admin_user.id,
         )
         # Create a cross-facility event (visible to all)
         global_event = EventModel(
-            title="Global Event", event_type="flood", severity="medium",
-            status="active", facility=None, created_by=admin_user.id,
+            title="Global Event",
+            event_type="flood",
+            severity="medium",
+            status="active",
+            facility=None,
+            created_by=admin_user.id,
         )
         db_session.add_all([testfab_event, otherfab_event, global_event])
         await db_session.flush()
@@ -105,9 +118,7 @@ class TestCreateEvent:
         assert r.status_code == 201
         event_id = r.json()["id"]
 
-        result = await db_session.execute(
-            select(SafetyReport).where(SafetyReport.event_id == event_id)
-        )
+        result = await db_session.execute(select(SafetyReport).where(SafetyReport.event_id == event_id))
         reports = result.scalars().all()
         assert len(reports) == 3  # admin + manager + employee
         assert all(rep.status is None for rep in reports)
@@ -126,9 +137,7 @@ class TestCreateEvent:
         assert data["facility"] == ["TestFab"]
         event_id = data["id"]
 
-        result = await db_session.execute(
-            select(SafetyReport).where(SafetyReport.event_id == event_id)
-        )
+        result = await db_session.execute(select(SafetyReport).where(SafetyReport.event_id == event_id))
         reports = result.scalars().all()
         user_ids = {str(rep.user_id) for rep in reports}
         assert str(employee_other_fab.id) not in user_ids
@@ -147,9 +156,7 @@ class TestCreateEvent:
         )
         event_id = r.json()["id"]
 
-        result = await db_session.execute(
-            select(SafetyReport).where(SafetyReport.event_id == event_id)
-        )
+        result = await db_session.execute(select(SafetyReport).where(SafetyReport.event_id == event_id))
         reports = result.scalars().all()
         assert len(reports) == 2  # admin + manager only
 
@@ -226,23 +233,17 @@ class TestDeleteEvent:
         r2 = await client.get(f"/api/events/{event_id}")
         assert r2.status_code == 404
 
-    async def test_delete_cascades_reports_and_reminders(
-        self, client, admin_headers, active_event, db_session
-    ):
+    async def test_delete_cascades_reports_and_reminders(self, client, admin_headers, active_event, db_session):
         event_id = active_event.id
         # Trigger a reminder to create a reminder record
         await client.post(f"/api/events/{event_id}/remind", headers=admin_headers)
 
         await client.delete(f"/api/events/{event_id}", headers=admin_headers)
 
-        reports = await db_session.execute(
-            select(SafetyReport).where(SafetyReport.event_id == event_id)
-        )
+        reports = await db_session.execute(select(SafetyReport).where(SafetyReport.event_id == event_id))
         assert reports.scalars().all() == []
 
-        reminders = await db_session.execute(
-            select(Reminder).where(Reminder.event_id == event_id)
-        )
+        reminders = await db_session.execute(select(Reminder).where(Reminder.event_id == event_id))
         assert reminders.scalars().all() == []
 
     async def test_delete_nonexistent_event_returns_404(self, client, admin_headers):
@@ -253,7 +254,5 @@ class TestDeleteEvent:
         assert r.status_code == 404
 
     async def test_employee_cannot_delete_event(self, client, employee_headers, active_event):
-        r = await client.delete(
-            f"/api/events/{active_event.id}", headers=employee_headers
-        )
+        r = await client.delete(f"/api/events/{active_event.id}", headers=employee_headers)
         assert r.status_code == 403

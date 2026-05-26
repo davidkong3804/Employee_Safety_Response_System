@@ -18,9 +18,7 @@ class Event(Base):
     severity: Mapped[str] = mapped_column(
         Enum("low", "medium", "high", "critical", name="severity_level"), nullable=False
     )
-    status: Mapped[str] = mapped_column(
-        Enum("active", "closed", name="event_status"), default="active"
-    )
+    status: Mapped[str] = mapped_column(Enum("active", "closed", name="event_status"), default="active")
     facility: Mapped[list[str] | None] = mapped_column(ARRAY(String(50)))
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

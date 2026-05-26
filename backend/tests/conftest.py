@@ -28,10 +28,12 @@ from app.modules.notifications.models import Reminder
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
 
+
 # Replace lifespan with a no-op so tests fully control schema setup/teardown
 @asynccontextmanager
 async def _noop_lifespan(application):
     yield
+
 
 app.router.lifespan_context = _noop_lifespan
 
@@ -86,6 +88,7 @@ async def client(db_session):
 # ---------------------------------------------------------------------------
 # User fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture()
 async def admin_user(db_session) -> User:
@@ -143,6 +146,7 @@ async def employee_user(db_session, manager_user) -> User:
 # Auth header fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def admin_headers(admin_user) -> dict:
     return {"Authorization": f"Bearer {create_access_token(str(admin_user.id))}"}
@@ -179,6 +183,7 @@ async def employee_other_fab(db_session, manager_user) -> User:
 # ---------------------------------------------------------------------------
 # Event fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture()
 async def active_event(db_session, admin_user, manager_user, employee_user) -> Event:

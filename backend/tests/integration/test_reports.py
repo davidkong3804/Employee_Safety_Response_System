@@ -1,4 +1,5 @@
 """Integration tests for report submission and statistics endpoints."""
+
 import pytest
 
 
@@ -91,9 +92,7 @@ class TestSubmitReport:
 
 @pytest.mark.integration
 class TestGetMyReport:
-    async def test_returns_placeholder_before_submission(
-        self, client, employee_headers, active_event
-    ):
+    async def test_returns_placeholder_before_submission(self, client, employee_headers, active_event):
         r = await client.get(
             f"/api/events/{active_event.id}/my-report",
             headers=employee_headers,
@@ -115,12 +114,8 @@ class TestGetMyReport:
 
 @pytest.mark.integration
 class TestEventStats:
-    async def test_admin_sees_event_wide_totals(
-        self, client, admin_headers, active_event
-    ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/stats", headers=admin_headers
-        )
+    async def test_admin_sees_event_wide_totals(self, client, admin_headers, active_event):
+        r = await client.get(f"/api/events/{active_event.id}/stats", headers=admin_headers)
         assert r.status_code == 200
         data = r.json()
         # Admin sees all 3 placeholders (admin + manager + employee).
@@ -128,12 +123,8 @@ class TestEventStats:
         assert data["unreported"] == 3
         assert data["report_rate"] == 0.0
 
-    async def test_manager_stats_scoped_to_own_department(
-        self, client, manager_headers, active_event
-    ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/stats", headers=manager_headers
-        )
+    async def test_manager_stats_scoped_to_own_department(self, client, manager_headers, active_event):
+        r = await client.get(f"/api/events/{active_event.id}/stats", headers=manager_headers)
         assert r.status_code == 200
         data = r.json()
         # Manager is in Engineering — sees only Engineering placeholders
@@ -141,9 +132,7 @@ class TestEventStats:
         assert data["total"] == 2
         assert data["unreported"] == 2
 
-    async def test_stats_after_one_safe_report_admin_view(
-        self, client, admin_headers, employee_headers, active_event
-    ):
+    async def test_stats_after_one_safe_report_admin_view(self, client, admin_headers, employee_headers, active_event):
         event_id = str(active_event.id)
         await client.post(
             f"/api/events/{event_id}/report",
@@ -174,28 +163,20 @@ class TestEventStats:
         assert data["report_rate"] == pytest.approx(50.0, abs=0.1)
 
     async def test_employee_cannot_see_stats(self, client, employee_headers, active_event):
-        r = await client.get(
-            f"/api/events/{active_event.id}/stats", headers=employee_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/stats", headers=employee_headers)
         assert r.status_code == 403
 
 
 @pytest.mark.integration
 class TestStatsByDepartment:
-    async def test_admin_sees_all_departments(
-        self, client, admin_headers, active_event
-    ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/stats/by-department", headers=admin_headers
-        )
+    async def test_admin_sees_all_departments(self, client, admin_headers, active_event):
+        r = await client.get(f"/api/events/{active_event.id}/stats/by-department", headers=admin_headers)
         assert r.status_code == 200
         dept_names = {d["department"] for d in r.json()}
         assert "Engineering" in dept_names
         assert "IT" in dept_names
 
-    async def test_manager_dept_stats_only_own_department(
-        self, client, manager_headers, active_event
-    ):
+    async def test_manager_dept_stats_only_own_department(self, client, manager_headers, active_event):
         r = await client.get(
             f"/api/events/{active_event.id}/stats/by-department",
             headers=manager_headers,
@@ -207,9 +188,7 @@ class TestStatsByDepartment:
         eng = next(d for d in data if d["department"] == "Engineering")
         assert eng["total"] == 2  # manager + employee, not admin
 
-    async def test_employee_cannot_see_department_stats(
-        self, client, employee_headers, active_event
-    ):
+    async def test_employee_cannot_see_department_stats(self, client, employee_headers, active_event):
         r = await client.get(
             f"/api/events/{active_event.id}/stats/by-department",
             headers=employee_headers,
@@ -219,12 +198,8 @@ class TestStatsByDepartment:
 
 @pytest.mark.integration
 class TestTeamStatus:
-    async def test_admin_sees_all_reports(
-        self, client, admin_headers, active_event
-    ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=admin_headers
-        )
+    async def test_admin_sees_all_reports(self, client, admin_headers, active_event):
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=admin_headers)
         assert r.status_code == 200
         data = r.json()
         assert data["total"] == 3
@@ -233,15 +208,13 @@ class TestTeamStatus:
     async def test_manager_sees_own_department_employees(
         self, client, manager_headers, manager_user, employee_user, admin_user, active_event
     ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=manager_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=manager_headers)
         assert r.status_code == 200
         items = r.json()["items"]
         user_ids = {rep["user_id"] for rep in items}
-        assert str(manager_user.id) in user_ids       # self
-        assert str(employee_user.id) in user_ids      # same dept (Engineering)
-        assert str(admin_user.id) not in user_ids     # different dept (IT)
+        assert str(manager_user.id) in user_ids  # self
+        assert str(employee_user.id) in user_ids  # same dept (Engineering)
+        assert str(admin_user.id) not in user_ids  # different dept (IT)
 
     async def test_manager_sees_dept_employee_even_if_not_direct_report(
         self, client, manager_headers, manager_user, admin_user, db_session, active_event
@@ -266,18 +239,18 @@ class TestTeamStatus:
         )
         db_session.add(other)
         await db_session.flush()
-        db_session.add(SafetyReport(
-            event_id=active_event.id,
-            user_id=other.id,
-            manager_id_snapshot=other.manager_id,
-            department_snapshot=other.department,
-            facility_snapshot=other.facility,
-        ))
+        db_session.add(
+            SafetyReport(
+                event_id=active_event.id,
+                user_id=other.id,
+                manager_id_snapshot=other.manager_id,
+                department_snapshot=other.department,
+                facility_snapshot=other.facility,
+            )
+        )
         await db_session.flush()
 
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=manager_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=manager_headers)
         ids = {rep["user_id"] for rep in r.json()["items"]}
         assert str(other.id) in ids
 
@@ -303,18 +276,18 @@ class TestTeamStatus:
         )
         db_session.add(other)
         await db_session.flush()
-        db_session.add(SafetyReport(
-            event_id=active_event.id,
-            user_id=other.id,
-            manager_id_snapshot=other.manager_id,
-            department_snapshot=other.department,  # "Sales"
-            facility_snapshot=other.facility,
-        ))
+        db_session.add(
+            SafetyReport(
+                event_id=active_event.id,
+                user_id=other.id,
+                manager_id_snapshot=other.manager_id,
+                department_snapshot=other.department,  # "Sales"
+                facility_snapshot=other.facility,
+            )
+        )
         await db_session.flush()
 
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=manager_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=manager_headers)
         ids = {rep["user_id"] for rep in r.json()["items"]}
         assert str(other.id) not in ids
 
@@ -329,29 +302,33 @@ class TestTeamStatus:
 
         # 3 existing + 100 bulk = 103 placeholders for this event
         for i in range(100):
-            db_session.add(User(
-                employee_id=f"TEST_E_BULK_{i:03d}",
-                name=f"Bulk Employee {i:03d}",
-                email=f"bulk{i:03d}@example.com",
-                password_hash=_hash("testpassword"),
-                role="employee",
-                department="Engineering",
-                facility="TestFab",
-                manager_id=manager_user.id,
-                is_active=True,
-            ))
+            db_session.add(
+                User(
+                    employee_id=f"TEST_E_BULK_{i:03d}",
+                    name=f"Bulk Employee {i:03d}",
+                    email=f"bulk{i:03d}@example.com",
+                    password_hash=_hash("testpassword"),
+                    role="employee",
+                    department="Engineering",
+                    facility="TestFab",
+                    manager_id=manager_user.id,
+                    is_active=True,
+                )
+            )
         await db_session.flush()
-        bulk_users = (await db_session.execute(
-            _select(User).where(User.employee_id.like("TEST_E_BULK_%"))
-        )).scalars().all()
+        bulk_users = (
+            (await db_session.execute(_select(User).where(User.employee_id.like("TEST_E_BULK_%")))).scalars().all()
+        )
         for u in bulk_users:
-            db_session.add(SafetyReport(
-                event_id=active_event.id,
-                user_id=u.id,
-                manager_id_snapshot=u.manager_id,
-                department_snapshot=u.department,
-                facility_snapshot=u.facility,
-            ))
+            db_session.add(
+                SafetyReport(
+                    event_id=active_event.id,
+                    user_id=u.id,
+                    manager_id_snapshot=u.manager_id,
+                    department_snapshot=u.department,
+                    facility_snapshot=u.facility,
+                )
+            )
         await db_session.flush()
 
         # First page
@@ -392,9 +369,7 @@ class TestTeamStatus:
         statuses = {item["status"] for item in data["items"]}
         assert statuses == {None}
 
-    async def test_search_filters_by_employee_id(
-        self, client, admin_headers, employee_user, active_event
-    ):
+    async def test_search_filters_by_employee_id(self, client, admin_headers, employee_user, active_event):
         r = await client.get(
             f"/api/events/{active_event.id}/team-status?search=TEST_E001",
             headers=admin_headers,
@@ -403,21 +378,15 @@ class TestTeamStatus:
         assert data["total"] == 1
         assert data["items"][0]["employee_id"] == "TEST_E001"
 
-    async def test_employee_cannot_see_team_status(
-        self, client, employee_headers, active_event
-    ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=employee_headers
-        )
+    async def test_employee_cannot_see_team_status(self, client, employee_headers, active_event):
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=employee_headers)
         assert r.status_code == 403
 
 
 @pytest.mark.integration
 class TestAllStatus:
     async def test_admin_gets_all_reports(self, client, admin_headers, active_event):
-        r = await client.get(
-            f"/api/events/{active_event.id}/all-status", headers=admin_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/all-status", headers=admin_headers)
         assert r.status_code == 200
         assert r.json()["total"] == 3
         assert len(r.json()["items"]) == 3
@@ -430,9 +399,7 @@ class TestAllStatus:
         assert r.status_code == 200
         assert len(r.json()["items"]) == 3
 
-    async def test_filter_by_unknown_facility_returns_empty(
-        self, client, admin_headers, active_event
-    ):
+    async def test_filter_by_unknown_facility_returns_empty(self, client, admin_headers, active_event):
         r = await client.get(
             f"/api/events/{active_event.id}/all-status?facility=NoSuchFab",
             headers=admin_headers,
@@ -442,12 +409,8 @@ class TestAllStatus:
         assert data["items"] == []
         assert data["total"] == 0
 
-    async def test_manager_cannot_see_all_status(
-        self, client, manager_headers, active_event
-    ):
-        r = await client.get(
-            f"/api/events/{active_event.id}/all-status", headers=manager_headers
-        )
+    async def test_manager_cannot_see_all_status(self, client, manager_headers, active_event):
+        r = await client.get(f"/api/events/{active_event.id}/all-status", headers=manager_headers)
         assert r.status_code == 403
 
 
@@ -469,9 +432,7 @@ class TestOrgSnapshotIsolation:
         active_event,
     ):
         # Before any change: the employee shows up in the manager's view.
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=manager_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=manager_headers)
         assert r.status_code == 200
         before_ids = {rep["user_id"] for rep in r.json()["items"]}
         assert str(employee_user.id) in before_ids
@@ -484,9 +445,7 @@ class TestOrgSnapshotIsolation:
         # Manager scope is dept-based, but it reads department_snapshot
         # (frozen), not live user.department — so the historical view is
         # unchanged.
-        r = await client.get(
-            f"/api/events/{active_event.id}/team-status", headers=manager_headers
-        )
+        r = await client.get(f"/api/events/{active_event.id}/team-status", headers=manager_headers)
         assert r.status_code == 200
         after_ids = {rep["user_id"] for rep in r.json()["items"]}
         assert before_ids == after_ids

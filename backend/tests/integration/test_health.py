@@ -1,4 +1,5 @@
 """Integration test for the health check endpoint."""
+
 import pytest
 
 

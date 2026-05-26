@@ -1,4 +1,5 @@
 """Integration tests for /api/users endpoints."""
+
 import pytest
 
 

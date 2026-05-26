@@ -112,4 +112,3 @@ async def delete_user(
     user.is_active = False
     await db.flush()
     await cache_invalidate_pattern(f"user:profile:{user_id}")
-

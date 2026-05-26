@@ -50,9 +50,7 @@ async def trigger_reminders(
         filters.append(SafetyReport.department_snapshot == current_user.department)
 
     unreported_rows = await db.execute(
-        select(SafetyReport.user_id)
-        .join(User, SafetyReport.user_id == User.id)
-        .where(*filters)
+        select(SafetyReport.user_id).join(User, SafetyReport.user_id == User.id).where(*filters)
     )
     unreported_user_ids: list[UUID] = [row[0] for row in unreported_rows.all()]
     count = len(unreported_user_ids)
@@ -114,20 +112,20 @@ async def get_reminders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
-    result = await db.execute(
-        select(Reminder).where(Reminder.event_id == event_id)
-    )
+    result = await db.execute(select(Reminder).where(Reminder.event_id == event_id))
     reminders = []
     for r in result.scalars().all():
-        reminders.append(ReminderResponse(
-            id=str(r.id),
-            event_id=str(r.event_id),
-            user_id=str(r.user_id),
-            user_name=r.user.name,
-            employee_id=r.user.employee_id,
-            reminder_count=r.reminder_count,
-            last_reminded=r.last_reminded,
-        ))
+        reminders.append(
+            ReminderResponse(
+                id=str(r.id),
+                event_id=str(r.event_id),
+                user_id=str(r.user_id),
+                user_name=r.user.name,
+                employee_id=r.user.employee_id,
+                reminder_count=r.reminder_count,
+                last_reminded=r.last_reminded,
+            )
+        )
     return reminders
 
 
@@ -158,8 +156,7 @@ async def get_my_reminders(
         .join(Event, Reminder.event_id == Event.id)
         .join(
             SafetyReport,
-            (SafetyReport.event_id == Reminder.event_id)
-            & (SafetyReport.user_id == Reminder.user_id),
+            (SafetyReport.event_id == Reminder.event_id) & (SafetyReport.user_id == Reminder.user_id),
         )
         .where(
             Reminder.user_id == current_user.id,

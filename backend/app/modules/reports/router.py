@@ -122,7 +122,10 @@ async def submit_report(
     )
     log.info(
         "submit_report event=%s user=%s status=%s buffered=%s",
-        event_id, current_user.id, data.status, buffered,
+        event_id,
+        current_user.id,
+        data.status,
+        buffered,
     )
 
     # Always SELECT the placeholder — needed for report.id in the response
@@ -193,7 +196,8 @@ async def get_my_report(
     report = result.scalar_one_or_none()
     log.info(
         "get_my_report event=%s user=%s buffered_status=%s db_status=%s",
-        event_id, current_user.id,
+        event_id,
+        current_user.id,
         (buffered or {}).get("status"),
         report.status if report else None,
     )
@@ -208,11 +212,13 @@ async def get_my_report(
             reported_at_val = datetime.fromisoformat(buffered["reported_at"])
         except (KeyError, ValueError):
             reported_at_val = response.reported_at
-        response = response.model_copy(update={
-            "status": buffered["status"],
-            "message": buffered.get("message") or response.message,
-            "reported_at": reported_at_val,
-        })
+        response = response.model_copy(
+            update={
+                "status": buffered["status"],
+                "message": buffered.get("message") or response.message,
+                "reported_at": reported_at_val,
+            }
+        )
     return response
 
 
@@ -233,10 +239,7 @@ async def get_event_stats(
     if cached is not None:
         return EventStats(**cached)
 
-    query = (
-        select(SafetyReport.status, func.count(SafetyReport.id))
-        .where(SafetyReport.event_id == event_id)
-    )
+    query = select(SafetyReport.status, func.count(SafetyReport.id)).where(SafetyReport.event_id == event_id)
     if current_user.role != "admin":
         query = query.where(SafetyReport.department_snapshot == current_user.department)
     query = query.group_by(SafetyReport.status)
@@ -273,9 +276,8 @@ async def get_stats_by_department(
     # Group by the snapshot, not the user's current department. Otherwise an
     # employee transferring between departments would retroactively move
     # their count out of the historical event's tally. (C6)
-    query = (
-        select(SafetyReport.department_snapshot, SafetyReport.status, func.count(SafetyReport.id))
-        .where(SafetyReport.event_id == event_id)
+    query = select(SafetyReport.department_snapshot, SafetyReport.status, func.count(SafetyReport.id)).where(
+        SafetyReport.event_id == event_id
     )
     if current_user.role != "admin":
         # Manager's bar chart collapses to a single row for their own dept —
