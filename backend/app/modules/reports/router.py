@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.cache import buffer_report, cache_get_json, cache_invalidate_pattern, cache_set_json, get_buffered_report
-from app.database import get_db
+from app.database import get_db, get_read_db
 from app.dependencies import get_current_user, require_role
 from app.modules.reports.models import SafetyReport
 from app.modules.reports.schemas import (
@@ -169,7 +169,7 @@ async def submit_report(
 @router.get("/{event_id}/my-report", response_model=ReportResponse | None)
 async def get_my_report(
     event_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(get_current_user),
 ):
     # Check the Redis write buffer first. When a report was just submitted
@@ -219,7 +219,7 @@ async def get_my_report(
 @router.get("/{event_id}/stats", response_model=EventStats)
 async def get_event_stats(
     event_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
     # Cache check first — Manager Dashboard polls every 30s, so many
@@ -261,7 +261,7 @@ async def get_event_stats(
 @router.get("/{event_id}/stats/by-department", response_model=list[DepartmentStats])
 async def get_stats_by_department(
     event_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
     scope = _scope_token(current_user)
@@ -310,7 +310,7 @@ async def get_team_status(
     status: StatusFilter | None = None,
     search: str | None = Query(None, max_length=80),
     department: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
     # Role-scoped base query. Manager sees their *current* department's
@@ -371,7 +371,7 @@ async def get_all_status(
     search: str | None = Query(None, max_length=80),
     facility: str | None = None,
     department: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(require_role("admin")),
 ):
     # Filter on snapshot fields so a user who has since moved facility /

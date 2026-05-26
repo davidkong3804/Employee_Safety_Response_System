@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://app:devpassword@localhost:5432/safety_response"
+    READ_DATABASE_URL: str | None = None
     REDIS_URL: str = "redis://localhost:6379"
     JWT_SECRET: str = "dev-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"

@@ -1,15 +1,49 @@
+import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import cache_get_json, cache_set_json
 from app.config import settings
 from app.database import get_db
 from app.modules.users.models import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+
+USER_PROFILE_TTL = 600
+
+
+async def _get_user_by_id(user_id: str, db: AsyncSession) -> User | None:
+    cache_key = f"user:profile:{user_id}"
+    cached_user = await cache_get_json(cache_key)
+    if cached_user is not None:
+        if "id" in cached_user and isinstance(cached_user["id"], str):
+            cached_user["id"] = uuid.UUID(cached_user["id"])
+        if "manager_id" in cached_user and cached_user["manager_id"] is not None and isinstance(cached_user["manager_id"], str):
+            cached_user["manager_id"] = uuid.UUID(cached_user["manager_id"])
+        return User(**cached_user)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        user_dict = {
+            "id": str(user.id),
+            "employee_id": user.employee_id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "department": user.department,
+            "facility": user.facility,
+            "phone": user.phone,
+            "manager_id": str(user.manager_id) if user.manager_id else None,
+            "is_active": user.is_active,
+            "password_hash": user.password_hash,
+        }
+        await cache_set_json(cache_key, user_dict, ttl_seconds=USER_PROFILE_TTL)
+    return user
 
 
 async def get_current_user(
@@ -29,8 +63,7 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await _get_user_by_id(user_id, db)
     if user is None:
         raise credentials_exception
     return user
@@ -49,8 +82,8 @@ async def get_optional_user(
             return None
     except JWTError:
         return None
-    result = await db.execute(select(User).where(User.id == user_id))
-    return result.scalar_one_or_none()
+    return await _get_user_by_id(user_id, db)
+
 
 
 def require_role(*roles: str):

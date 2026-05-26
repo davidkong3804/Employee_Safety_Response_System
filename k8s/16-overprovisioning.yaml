@@ -1,0 +1,31 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: overprovisioning
+value: -10
+globalDefault: false
+description: "Priority class for overprovisioning placeholder pods (Pause pods)"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overprovisioning-placeholder
+  namespace: safety-system
+spec:
+  replicas: 4 # Pre-warm 4 pods worth of headroom (covers 4 * 250m = 1 vCPU of backend headroom)
+  selector:
+    matchLabels:
+      app: overprovisioning-placeholder
+  template:
+    metadata:
+      labels:
+        app: overprovisioning-placeholder
+    spec:
+      priorityClassName: overprovisioning
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
