@@ -125,6 +125,10 @@
     "reportByEvent": "Report Status by Event",
     "overallDistribution": "Overall Status Distribution"
   },
+  "reminder": {
+    "banner": "Your manager is reminding you to report your status for \"{{event}}\". Please report now.",
+    "bannerMulti": "Your manager is reminding you to report status for {{count}} event(s). Please report now."
+  },
   "facility": {
     "selectFacilities": "Select Affected Facilities",
     "taiwan": "Taiwan",
