@@ -1,6 +1,9 @@
 """Integration tests for reminder endpoints."""
 import pytest
 
+from app.modules.reports.models import SafetyReport
+from app.modules.users.models import User
+
 
 @pytest.mark.integration
 class TestTriggerReminders:
@@ -55,6 +58,37 @@ class TestTriggerReminders:
             f"/api/events/{active_event.id}/remind", headers=employee_headers
         )
         assert r.status_code == 403
+
+    async def test_excludes_inactive_users(
+        self, client, manager_headers, active_event, db_session
+    ):
+        """Placeholder rows for is_active=False users must not be reminded.
+
+        Real-world trigger: load-test accounts were deactivated (or pruned
+        from the users table) but their placeholder SafetyReport rows
+        remain because deletion was scoped narrowly. The remind query
+        must JOIN users + filter is_active=True to skip them.
+        """
+        ghost = User(
+            employee_id="TEST_GHOST",
+            name="Inactive Ghost",
+            email="ghost@example.com",
+            password_hash="x",
+            role="employee",
+            department="Engineering",
+            facility="TestFab",
+            is_active=False,
+        )
+        db_session.add(ghost)
+        await db_session.flush()
+        db_session.add(SafetyReport(event_id=active_event.id, user_id=ghost.id))
+        await db_session.flush()
+
+        r = await client.post(
+            f"/api/events/{active_event.id}/remind", headers=manager_headers
+        )
+        # Still 3 (admin + manager + employee) — ghost must be excluded.
+        assert r.json()["reminded_count"] == 3
 
 
 @pytest.mark.integration
