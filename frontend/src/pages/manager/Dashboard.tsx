@@ -295,15 +295,25 @@ export default function Dashboard() {
   )
 }
 
+// Grid template shared between header and rows so columns stay aligned.
+// Message column is the only flexible one (minmax 160px → 2fr) because
+// safe / unreported rows leave it empty and need_help rows benefit from
+// the extra width when phone / dept don't need it.
+const GRID_COLS = '100px minmax(120px,1fr) minmax(120px,1fr) 100px 120px 140px minmax(160px,2fr)'
+
 function ListHeader({ t }: { t: (key: string) => string }) {
   return (
-    <div className="grid grid-cols-[100px_minmax(120px,1fr)_minmax(120px,1fr)_100px_120px_140px] gap-3 px-4 py-3 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 border-b">
+    <div
+      className="grid gap-3 px-4 py-3 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 border-b"
+      style={{ gridTemplateColumns: GRID_COLS }}
+    >
       <div>ID</div>
       <div>{t('user.name')}</div>
       <div>{t('user.department')}</div>
       <div>{t('user.facility')}</div>
       <div>{t('common.status')}</div>
       <div>{t('user.phone')}</div>
+      <div>{t('dashboard.note')}</div>
     </div>
   )
 }
@@ -320,10 +330,13 @@ function ReportRow({
     : r.status === null
       ? 'bg-yellow-50'
       : ''
+  // Native title attribute gives a hover tooltip with the full message —
+  // keeps the row height fixed (react-window requires constant ROW_HEIGHT)
+  // while still letting the employee read longer messages on demand.
   return (
     <div
-      style={style}
-      className={`grid grid-cols-[100px_minmax(120px,1fr)_minmax(120px,1fr)_100px_120px_140px] gap-3 px-4 items-center border-b border-gray-100 ${bg}`}
+      style={{ ...style, gridTemplateColumns: GRID_COLS }}
+      className={`grid gap-3 px-4 items-center border-b border-gray-100 ${bg}`}
     >
       <div className="text-sm font-mono truncate">{r.employee_id}</div>
       <div className="font-medium truncate">{r.user_name}</div>
@@ -331,6 +344,12 @@ function ReportRow({
       <div className="text-sm truncate">{r.facility}</div>
       <div><StatusBadge status={r.status} /></div>
       <div className="text-sm text-gray-500 truncate">{r.phone}</div>
+      <div
+        className={`text-sm truncate ${r.status === 'need_help' ? 'text-red-700 font-medium' : 'text-gray-500'}`}
+        title={r.message || undefined}
+      >
+        {r.message || ''}
+      </div>
     </div>
   )
 }

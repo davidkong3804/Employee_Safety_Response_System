@@ -99,7 +99,8 @@
     "remindFailed": "發送提醒失敗",
     "showing": "顯示 {{shown}} / {{total}} 筆",
     "searchPlaceholder": "搜尋姓名或工號",
-    "noResults": "沒有符合條件的回報"
+    "noResults": "沒有符合條件的回報",
+    "note": "備註"
   },
   "user": {
     "create": "新增使用者",

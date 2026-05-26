@@ -99,7 +99,8 @@
     "remindFailed": "Failed to send reminders",
     "showing": "Showing {{shown}} / {{total}}",
     "searchPlaceholder": "Search name or ID",
-    "noResults": "No matching reports"
+    "noResults": "No matching reports",
+    "note": "Note"
   },
   "user": {
     "create": "Create User",
