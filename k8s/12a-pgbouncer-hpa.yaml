@@ -1,0 +1,58 @@
+# HPA for PgBouncer connection pooler.
+#
+# PgBouncer is normally CPU-light — it shuffles bytes between sockets. Under
+# spike traffic it CAN saturate one core because (a) every new client conn
+# costs a TLS-less handshake + lookup, (b) prepared-statement bookkeeping
+# (PGBOUNCER_MAX_PREPARED_STATEMENTS=200) is per-client and grows with concurrent
+# clients. We've seen `cl_waiting` climb when a single bouncer pod handles
+# 800+ client conns even though server pool isn't exhausted.
+#
+# Min=3 (matches the deployment baseline) keeps multiplexing capacity warm.
+# Max=6 caps the server fan-out: 6 × DEFAULT_POOL_SIZE(50) = 300 server conns,
+# which fits under Cloud SQL max_connections=400 with headroom for ad-hoc
+# direct connections (psql, migrations, admin paths through cloudsql-proxy).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pgbouncer
+  namespace: safety-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pgbouncer
+  minReplicas: 3
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # 70%: bouncer's resource limit is 250m, so 70% = ~175m sustained
+          # before scale-up. Higher threshold than backend (60%) because the
+          # bouncer is the safety valve — letting it run hot is fine as long
+          # as `cl_waiting` doesn't accumulate.
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      # Short window — when bouncer is hot, adding a pod immediately gives
+      # the backend a fresh multiplexer to dial into.
+      stabilizationWindowSeconds: 0
+      policies:
+        # Up to 2 pods per 30s, doubling if more aggressive.
+        - type: Pods
+          value: 2
+          periodSeconds: 30
+        - type: Percent
+          value: 50
+          periodSeconds: 30
+      selectPolicy: Max
+    scaleDown:
+      # Connection caches benefit from stability — don't tear down a hot
+      # bouncer just because load briefly dipped.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
