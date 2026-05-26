@@ -29,6 +29,14 @@ data:
   PGBOUNCER_LOG_CONNECTIONS: "0"
   PGBOUNCER_LOG_DISCONNECTIONS: "0"
   PGBOUNCER_LOG_POOLER_ERRORS: "1"
+  # Enable prepared-statement support in transaction-mode pooling.
+  # Without this, asyncpg's per-connection prepared statement cache collides
+  # whenever PgBouncer assigns the next transaction to a different server
+  # connection — producing `DuplicatePreparedStatementError __asyncpg_stmt_N__`
+  # under any non-trivial load. PgBouncer 1.21+ tracks PREPARE/EXECUTE/DEALLOCATE
+  # per client, replaying them on whatever server connection it routes to.
+  # 200 is comfortably above SQLAlchemy + asyncpg working-set size.
+  PGBOUNCER_MAX_PREPARED_STATEMENTS: "200"
   # Stage 3-B: upstream switched from in-cluster postgres to cloudsql-proxy,
   # which fronts the Cloud SQL HA instance via Workload Identity + private IP.
   POSTGRESQL_HOST: "cloudsql-proxy"
