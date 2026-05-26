@@ -33,9 +33,6 @@
     "alreadyReported": "您已回報",
     "status": "您的狀態"
   },
-  "peers": {
-    "title": "同事狀態"
-  },
   "status": {
     "safe": "安全",
     "need_help": "需要協助",

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CheckCircle, Clock, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import { listEvents } from '../../api/events'
 import { getMyReport } from '../../api/reports'
 import { getMyReminders, type MyReminder } from '../../api/reminders'
@@ -137,13 +137,6 @@ export default function Home() {
                     >
                       {hasReported && <CheckCircle className="w-5 h-5 text-green-600" />}
                       {hasReported ? t('report.update') : t('report.title')}
-                    </Link>
-                    <Link
-                      to={`/events/${event.id}/peers`}
-                      className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition"
-                    >
-                      <Users className="w-5 h-5" />
-                      {t('peers.title')}
                     </Link>
                   </div>
                 </div>

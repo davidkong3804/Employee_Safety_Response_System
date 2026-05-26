@@ -33,9 +33,6 @@
     "alreadyReported": "You have already reported",
     "status": "Your Status"
   },
-  "peers": {
-    "title": "Team Status"
-  },
   "status": {
     "safe": "Safe",
     "need_help": "Need Help",
