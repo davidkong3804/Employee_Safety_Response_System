@@ -4,7 +4,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,24 +36,32 @@ def _apply_status_filter(query, status: StatusFilter | None):
     return query
 
 
-def _apply_search_filter(query, search: str | None):
+def _apply_search_filter(query, search: str | None, already_joined: bool = False):
     """Add a JOIN to users + ILIKE on name/employee_id. Caller must use this on
     BOTH the list query and the count query so totals stay consistent."""
     if not search:
         return query
     term = f"%{search}%"
-    return query.join(User, User.id == SafetyReport.user_id).where(
-        or_(User.name.ilike(term), User.employee_id.ilike(term))
-    )
+    if not already_joined:
+        query = query.join(User, User.id == SafetyReport.user_id)
+    return query.where(or_(User.name.ilike(term), User.employee_id.ilike(term)))
 
 
-# need_help → unreported → safe. Surfaces actionable rows first on the
+# need_help with remarks → need_help → unreported → safe. Surfaces actionable rows first on the
 # Manager Dashboard without requiring the client to re-sort.
 _URGENCY_ORDER = case(
-    (SafetyReport.status == "need_help", 0),
-    (SafetyReport.status.is_(None), 1),
-    (SafetyReport.status == "safe", 2),
-    else_=3,
+    (
+        and_(
+            SafetyReport.status == "need_help",
+            SafetyReport.message.isnot(None),
+            SafetyReport.message != "",
+        ),
+        0,
+    ),
+    (SafetyReport.status == "need_help", 1),
+    (SafetyReport.status.is_(None), 2),
+    (SafetyReport.status == "safe", 3),
+    else_=4,
 )
 
 router = APIRouter(prefix="/api/events", tags=["reports"])
@@ -334,13 +342,13 @@ async def get_team_status(
     if department:
         base_filters.append(SafetyReport.department_snapshot == department)
 
-    list_q = select(SafetyReport).where(*base_filters)
+    list_q = select(SafetyReport).join(User, User.id == SafetyReport.user_id).where(*base_filters)
     count_q = select(func.count(SafetyReport.id)).where(*base_filters)
 
     list_q = _apply_status_filter(list_q, status)
     count_q = _apply_status_filter(count_q, status)
-    list_q = _apply_search_filter(list_q, search)
-    count_q = _apply_search_filter(count_q, search)
+    list_q = _apply_search_filter(list_q, search, already_joined=True)
+    count_q = _apply_search_filter(count_q, search, already_joined=False)
 
     list_q = (
         list_q.options(
@@ -348,7 +356,7 @@ async def get_team_status(
                 User.name, User.employee_id, User.department, User.facility, User.phone
             )
         )
-        .order_by(_URGENCY_ORDER, SafetyReport.user_id)
+        .order_by(_URGENCY_ORDER, User.employee_id)
         .limit(limit)
         .offset(offset)
     )
@@ -385,13 +393,13 @@ async def get_all_status(
     if department:
         base_filters.append(SafetyReport.department_snapshot == department)
 
-    list_q = select(SafetyReport).where(*base_filters)
+    list_q = select(SafetyReport).join(User, User.id == SafetyReport.user_id).where(*base_filters)
     count_q = select(func.count(SafetyReport.id)).where(*base_filters)
 
     list_q = _apply_status_filter(list_q, status)
     count_q = _apply_status_filter(count_q, status)
-    list_q = _apply_search_filter(list_q, search)
-    count_q = _apply_search_filter(count_q, search)
+    list_q = _apply_search_filter(list_q, search, already_joined=True)
+    count_q = _apply_search_filter(count_q, search, already_joined=False)
 
     list_q = (
         list_q.options(
@@ -399,7 +407,7 @@ async def get_all_status(
                 User.name, User.employee_id, User.department, User.facility, User.phone
             )
         )
-        .order_by(_URGENCY_ORDER, SafetyReport.user_id)
+        .order_by(_URGENCY_ORDER, User.employee_id)
         .limit(limit)
         .offset(offset)
     )

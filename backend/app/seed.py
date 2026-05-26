@@ -168,6 +168,8 @@ async def seed_data():
             if eid in existing_emp_ids:
                 continue
             mgr_idx = (i - 1) % len(managers)
+            phone_raw = f"09{i:08d}"
+            phone = f"{phone_raw[:4]}-{phone_raw[4:7]}-{phone_raw[7:]}"
             session.add(
                 User(
                     employee_id=eid,
@@ -177,7 +179,7 @@ async def seed_data():
                     role="employee",
                     department=depts[mgr_idx],
                     facility=facilits[mgr_idx],
-                    phone=f"09{i:08d}",
+                    phone=phone,
                     manager_id=managers[mgr_idx].id,
                 )
             )
