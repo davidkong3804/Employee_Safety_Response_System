@@ -14,11 +14,13 @@ export default function EventManagement() {
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] as string[] })
 
+  // Returns the underlying promise so callers (e.g. handleCreate) can
+  // `await load()` and only act after the refetch lands.
   const load = () => {
-    listEvents().then(setEvents).finally(() => setLoading(false))
+    return listEvents().then(setEvents).finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(() => { void load() }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,9 +30,12 @@ export default function EventManagement() {
       const { facilities, ...rest } = form
       await createEvent({ ...rest, facility: facilities.length > 0 ? facilities : undefined })
       toast.success(t('event.createSuccess'))
+      // Refetch BEFORE closing the modal so the new event is already
+      // visible in the table when the dialog dismisses — avoids the
+      // empty-modal-then-flicker UX.
+      await load()
       setShowCreate(false)
       setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] })
-      load()
     } catch {
       toast.error(t('event.createFailed'))
     } finally {

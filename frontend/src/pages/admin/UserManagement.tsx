@@ -17,11 +17,13 @@ export default function UserManagement() {
     role: 'employee', department: '', facility: '', phone: '',
   })
 
+  // Returns the underlying promise so callers (e.g. handleCreate) can
+  // `await load()` and only act after the refetch lands.
   const load = () => {
-    listUsers(filterRole ? { role: filterRole } : undefined).then(setUsers).finally(() => setLoading(false))
+    return listUsers(filterRole ? { role: filterRole } : undefined).then(setUsers).finally(() => setLoading(false))
   }
 
-  useEffect(load, [filterRole])
+  useEffect(() => { void load() }, [filterRole])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,8 +32,10 @@ export default function UserManagement() {
     try {
       await createUser(form)
       toast.success(t('user.createSuccess'))
+      // Refetch BEFORE closing the modal so the new user is already in
+      // the table when the dialog dismisses — no flicker.
+      await load()
       setShowCreate(false)
-      load()
     } catch {
       toast.error(t('user.createFailed'))
     } finally {

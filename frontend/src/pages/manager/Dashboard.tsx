@@ -84,19 +84,22 @@ export default function Dashboard() {
 
   useEffect(() => { reloadAll() }, [reloadAll])
 
-  // 30s polling — only refreshes the KPI cards and dept chart (both already
-  // Redis-cached on the backend, cheap). The list is left alone so the
-  // user's scroll position and visible rows don't pop on every tick.
+  // 30s polling — refreshes KPI cards, dept chart, and the event list (so
+  // a newly-created admin event shows up in the selector without F5). The
+  // detailed employee list is intentionally left alone so the user's scroll
+  // position and visible rows don't pop on every tick.
   useEffect(() => {
     if (!selectedEventId) return
     const tick = async () => {
       try {
-        const [s, ds] = await Promise.all([
+        const [s, ds, evts] = await Promise.all([
           getEventStats(selectedEventId),
           getStatsByDepartment(selectedEventId),
+          listEvents(),
         ])
         setStats(s)
         setDeptStats(ds)
+        setEvents(evts)
       } catch {
         // swallow — next tick or manual refresh will retry
       }
