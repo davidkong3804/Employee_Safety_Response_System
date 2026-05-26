@@ -34,6 +34,7 @@ if (!i18n.isInitialized) {
           'report.failed': 'Report failed, please retry',
           'report.alreadyReported': 'You have already reported',
           'report.status': 'Your Status',
+          'report.updateHint': 'Want to update? Tap again.',
           'event.allFacilities': 'All Facilities',
           'facility.taiwan': 'Taiwan',
           'facility.hsinchu': 'Hsinchu',

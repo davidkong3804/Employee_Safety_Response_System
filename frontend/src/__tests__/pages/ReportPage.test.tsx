@@ -136,22 +136,38 @@ describe('ReportPage', () => {
   })
 
   describe('already reported', () => {
-    it('shows the already-reported confirmation instead of buttons', async () => {
+    beforeEach(() => {
       mockedGetEvent.mockResolvedValue(mockEvent)
       mockedGetMyReport.mockResolvedValue(reportedSafe)
+    })
+
+    it('shows the already-reported confirmation alongside update buttons', async () => {
       renderPage()
       await waitFor(() =>
         expect(screen.getByText('You have already reported')).toBeInTheDocument(),
       )
-      expect(screen.queryByText("I'm Safe")).not.toBeInTheDocument()
-      expect(screen.queryByText('Need Help')).not.toBeInTheDocument()
+      // Update buttons stay visible so the employee can change their answer.
+      expect(screen.getByText("I'm Safe")).toBeInTheDocument()
+      expect(screen.getByText('Need Help')).toBeInTheDocument()
+      expect(screen.getByText('Want to update? Tap again.')).toBeInTheDocument()
     })
 
     it('renders the prior message text when present', async () => {
-      mockedGetEvent.mockResolvedValue(mockEvent)
-      mockedGetMyReport.mockResolvedValue(reportedSafe)
       renderPage()
       await waitFor(() => expect(screen.getByText('all clear')).toBeInTheDocument())
+    })
+
+    it('lets the employee submit a status update from the already-reported view', async () => {
+      mockedSubmitReport.mockResolvedValue({ ...reportedSafe, status: 'need_help' })
+      renderPage()
+      await waitFor(() => screen.getByText('You have already reported'))
+      fireEvent.click(screen.getByText('Need Help'))
+      await waitFor(() =>
+        expect(mockedSubmitReport).toHaveBeenCalledWith('ev-1', {
+          status: 'need_help',
+          message: undefined,
+        }),
+      )
     })
   })
 })
