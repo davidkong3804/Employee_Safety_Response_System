@@ -5,7 +5,6 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Home from './pages/employee/Home'
 import ReportPage from './pages/employee/ReportPage'
-import PeerStatus from './pages/employee/PeerStatus'
 import Dashboard from './pages/manager/Dashboard'
 import EventManagement from './pages/admin/EventManagement'
 import UserManagement from './pages/admin/UserManagement'
@@ -26,10 +25,6 @@ export default function App() {
 
         <Route path="/events/:eventId/report" element={
           <ProtectedRoute><ReportPage /></ProtectedRoute>
-        } />
-
-        <Route path="/events/:eventId/peers" element={
-          <ProtectedRoute><PeerStatus /></ProtectedRoute>
         } />
 
         <Route path="/dashboard" element={

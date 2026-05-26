@@ -66,32 +66,40 @@ describe('reports API', () => {
   })
 
   describe('getTeamStatus()', () => {
-    it('GETs /api/events/{id}/team-status', async () => {
-      mockedGet.mockResolvedValue({ data: [] })
+    it('GETs /api/events/{id}/team-status with empty params object', async () => {
+      mockedGet.mockResolvedValue({ data: { items: [], total: 0, limit: 100, offset: 0 } })
       await getTeamStatus('ev-1')
-      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/team-status')
+      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/team-status', { params: {} })
+    })
+
+    it('forwards limit/offset/department/status/search query params', async () => {
+      mockedGet.mockResolvedValue({ data: { items: [], total: 0, limit: 100, offset: 0 } })
+      await getTeamStatus('ev-1', { limit: 50, offset: 100, department: 'Eng', status: 'need_help', search: 'alice' })
+      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/team-status', {
+        params: { limit: 50, offset: 100, department: 'Eng', status: 'need_help', search: 'alice' },
+      })
     })
   })
 
   describe('getAllStatus()', () => {
-    it('GETs /api/events/{id}/all-status with no query when filters are absent', async () => {
-      mockedGet.mockResolvedValue({ data: [] })
+    it('GETs /api/events/{id}/all-status with empty params when filters are absent', async () => {
+      mockedGet.mockResolvedValue({ data: { items: [], total: 0, limit: 100, offset: 0 } })
       await getAllStatus('ev-1')
-      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/all-status?')
+      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/all-status', { params: {} })
     })
 
-    it('builds a query string for facility filter', async () => {
-      mockedGet.mockResolvedValue({ data: [] })
-      await getAllStatus('ev-1', 'Fab14')
-      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/all-status?facility=Fab14')
+    it('forwards facility filter', async () => {
+      mockedGet.mockResolvedValue({ data: { items: [], total: 0, limit: 100, offset: 0 } })
+      await getAllStatus('ev-1', { facility: 'Fab14' })
+      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/all-status', { params: { facility: 'Fab14' } })
     })
 
-    it('builds a query string for both filters', async () => {
-      mockedGet.mockResolvedValue({ data: [] })
-      await getAllStatus('ev-1', 'Fab14', 'Engineering')
-      expect(mockedGet).toHaveBeenCalledWith(
-        '/api/events/ev-1/all-status?facility=Fab14&department=Engineering',
-      )
+    it('forwards facility + department filters', async () => {
+      mockedGet.mockResolvedValue({ data: { items: [], total: 0, limit: 100, offset: 0 } })
+      await getAllStatus('ev-1', { facility: 'Fab14', department: 'Engineering' })
+      expect(mockedGet).toHaveBeenCalledWith('/api/events/ev-1/all-status', {
+        params: { facility: 'Fab14', department: 'Engineering' },
+      })
     })
   })
 

@@ -89,12 +89,10 @@
     "reminded": "Sent {{count}} reminders",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
-    "remindFailed": "Failed to send reminders"
-  },
-  "peers": {
-    "title": "Peer Status",
-    "call": "Call",
-    "noData": "No team data"
+    "remindFailed": "Failed to send reminders",
+    "showing": "Showing {{shown}} / {{total}}",
+    "searchPlaceholder": "Search name or ID",
+    "noResults": "No matching reports"
   },
   "user": {
     "create": "Create User",

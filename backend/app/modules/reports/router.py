@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,24 +14,68 @@ from app.modules.reports.models import SafetyReport
 from app.modules.reports.schemas import (
     DepartmentStats,
     EventStats,
+    PaginatedReports,
     ReportResponse,
     ReportSubmit,
 )
 from app.modules.users.models import User
 
+StatusFilter = Literal["safe", "need_help", "unreported"]
+
+
+def _apply_status_filter(query, status: StatusFilter | None):
+    """Add a status WHERE clause, mapping the API-level "unreported" string to
+    the SQL-level `status IS NULL` predicate (placeholder rows store NULL)."""
+    if status == "unreported":
+        return query.where(SafetyReport.status.is_(None))
+    if status:
+        return query.where(SafetyReport.status == status)
+    return query
+
+
+def _apply_search_filter(query, search: str | None):
+    """Add a JOIN to users + ILIKE on name/employee_id. Caller must use this on
+    BOTH the list query and the count query so totals stay consistent."""
+    if not search:
+        return query
+    term = f"%{search}%"
+    return query.join(User, User.id == SafetyReport.user_id).where(
+        or_(User.name.ilike(term), User.employee_id.ilike(term))
+    )
+
+
+# need_help → unreported → safe. Surfaces actionable rows first on the
+# Manager Dashboard without requiring the client to re-sort.
+_URGENCY_ORDER = case(
+    (SafetyReport.status == "need_help", 0),
+    (SafetyReport.status.is_(None), 1),
+    (SafetyReport.status == "safe", 2),
+    else_=3,
+)
+
 router = APIRouter(prefix="/api/events", tags=["reports"])
 
 
-def _stats_cache_key(event_id: UUID) -> str:
-    return f"stats:event:{event_id}:overall"
+def _scope_token(user: "User") -> str:
+    """Distinguish admin (sees the full event) from a manager (sees only their
+    department). Embedded into cache keys so an admin's full-event aggregate
+    can't leak into a manager's dept-scoped view (or vice versa)."""
+    if user.role == "admin":
+        return "all"
+    return f"dept:{user.department or '_none'}"
 
 
-def _dept_stats_cache_key(event_id: UUID) -> str:
-    return f"stats:event:{event_id}:by-department"
+def _stats_cache_key(event_id: UUID, scope: str) -> str:
+    return f"stats:event:{event_id}:overall:{scope}"
+
+
+def _dept_stats_cache_key(event_id: UUID, scope: str) -> str:
+    return f"stats:event:{event_id}:by-department:{scope}"
 
 
 def _event_cache_pattern(event_id: UUID) -> str:
-    """All cache keys related to one event — used to invalidate after writes."""
+    """All cache keys related to one event — used to invalidate after writes.
+    Wildcard matches every scope variant (all / dept:*)."""
     return f"stats:event:{event_id}:*"
 
 
@@ -147,16 +192,23 @@ async def get_event_stats(
     # Cache check first — Manager Dashboard polls every 30s, so many
     # managers viewing the same event amplify this query N times in a
     # second. Cache hit returns immediately without hitting Postgres.
-    cache_key = _stats_cache_key(event_id)
+    # Scope is part of the key so admin (full event) and manager (own dept)
+    # can never collide on a shared cache entry.
+    scope = _scope_token(current_user)
+    cache_key = _stats_cache_key(event_id, scope)
     cached = await cache_get_json(cache_key)
     if cached is not None:
         return EventStats(**cached)
 
-    result = await db.execute(
+    query = (
         select(SafetyReport.status, func.count(SafetyReport.id))
         .where(SafetyReport.event_id == event_id)
-        .group_by(SafetyReport.status)
     )
+    if current_user.role != "admin":
+        query = query.where(SafetyReport.department_snapshot == current_user.department)
+    query = query.group_by(SafetyReport.status)
+
+    result = await db.execute(query)
     counts = {row[0]: row[1] for row in result.all()}
     safe = counts.get("safe", 0)
     need_help = counts.get("need_help", 0)
@@ -179,7 +231,8 @@ async def get_stats_by_department(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
-    cache_key = _dept_stats_cache_key(event_id)
+    scope = _scope_token(current_user)
+    cache_key = _dept_stats_cache_key(event_id, scope)
     cached = await cache_get_json(cache_key)
     if cached is not None:
         return cached
@@ -187,11 +240,18 @@ async def get_stats_by_department(
     # Group by the snapshot, not the user's current department. Otherwise an
     # employee transferring between departments would retroactively move
     # their count out of the historical event's tally. (C6)
-    result = await db.execute(
+    query = (
         select(SafetyReport.department_snapshot, SafetyReport.status, func.count(SafetyReport.id))
         .where(SafetyReport.event_id == event_id)
-        .group_by(SafetyReport.department_snapshot, SafetyReport.status)
     )
+    if current_user.role != "admin":
+        # Manager's bar chart collapses to a single row for their own dept —
+        # we still return the list shape so the frontend's chart code stays
+        # role-agnostic.
+        query = query.where(SafetyReport.department_snapshot == current_user.department)
+    query = query.group_by(SafetyReport.department_snapshot, SafetyReport.status)
+
+    result = await db.execute(query)
     dept_data: dict[str, dict] = {}
     for dept, status, count in result.all():
         dept_name = dept or "Unknown"
@@ -209,41 +269,73 @@ async def get_stats_by_department(
     return payload
 
 
-@router.get("/{event_id}/team-status", response_model=list[ReportResponse])
+@router.get("/{event_id}/team-status", response_model=PaginatedReports)
 async def get_team_status(
     event_id: UUID,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    status: StatusFilter | None = None,
+    search: str | None = Query(None, max_length=80),
+    department: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("manager", "admin")),
 ):
-    _user_fields = selectinload(SafetyReport.user).load_only(
-        User.name, User.employee_id, User.department, User.facility, User.phone
-    )
-    if current_user.role == "admin":
-        result = await db.execute(
-            select(SafetyReport)
-            .where(SafetyReport.event_id == event_id)
-            .options(_user_fields)
-        )
-    else:
-        # Filter on manager_id_snapshot, NOT user.manager_id today, so a
-        # past event's "my team" view stays stable across org changes.
-        # Also include the manager's own placeholder so they see themselves.
-        # (C6)
-        result = await db.execute(
-            select(SafetyReport)
-            .where(
-                SafetyReport.event_id == event_id,
-                (SafetyReport.manager_id_snapshot == current_user.id)
-                | (SafetyReport.user_id == current_user.id),
+    # Role-scoped base query. Manager sees their *current* department's
+    # placeholders (via department_snapshot == live user.department). This
+    # diverges from how SafetyReport otherwise uses snapshots — snapshots
+    # freeze the employee's org at event-creation time so historical stats
+    # don't shift, but the manager's "what's my view" pivots on where the
+    # manager works *now*. A manager moved from D1 to D2 sees D2's old
+    # events under their new lens — acceptable per design (manager
+    # transfers are rare; "my dept" follows the manager).
+    base_filters = [SafetyReport.event_id == event_id]
+    if current_user.role != "admin":
+        base_filters.append(
+            or_(
+                SafetyReport.department_snapshot == current_user.department,
+                SafetyReport.user_id == current_user.id,
             )
-            .options(_user_fields)
         )
-    return [_report_to_response(r) for r in result.scalars().all()]
+    if department:
+        base_filters.append(SafetyReport.department_snapshot == department)
+
+    list_q = select(SafetyReport).where(*base_filters)
+    count_q = select(func.count(SafetyReport.id)).where(*base_filters)
+
+    list_q = _apply_status_filter(list_q, status)
+    count_q = _apply_status_filter(count_q, status)
+    list_q = _apply_search_filter(list_q, search)
+    count_q = _apply_search_filter(count_q, search)
+
+    list_q = (
+        list_q.options(
+            selectinload(SafetyReport.user).load_only(
+                User.name, User.employee_id, User.department, User.facility, User.phone
+            )
+        )
+        .order_by(_URGENCY_ORDER, SafetyReport.user_id)
+        .limit(limit)
+        .offset(offset)
+    )
+
+    total = (await db.execute(count_q)).scalar_one()
+    items = (await db.execute(list_q)).scalars().all()
+
+    return PaginatedReports(
+        items=[_report_to_response(r) for r in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
-@router.get("/{event_id}/all-status", response_model=list[ReportResponse])
+@router.get("/{event_id}/all-status", response_model=PaginatedReports)
 async def get_all_status(
     event_id: UUID,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    status: StatusFilter | None = None,
+    search: str | None = Query(None, max_length=80),
     facility: str | None = None,
     department: str | None = None,
     db: AsyncSession = Depends(get_db),
@@ -252,18 +344,37 @@ async def get_all_status(
     # Filter on snapshot fields so a user who has since moved facility /
     # department doesn't unexpectedly drop in or out of a historical event's
     # filter. (C6)
-    query = (
-        select(SafetyReport)
-        .where(SafetyReport.event_id == event_id)
-        .options(
+    base_filters = [SafetyReport.event_id == event_id]
+    if facility:
+        base_filters.append(SafetyReport.facility_snapshot == facility)
+    if department:
+        base_filters.append(SafetyReport.department_snapshot == department)
+
+    list_q = select(SafetyReport).where(*base_filters)
+    count_q = select(func.count(SafetyReport.id)).where(*base_filters)
+
+    list_q = _apply_status_filter(list_q, status)
+    count_q = _apply_status_filter(count_q, status)
+    list_q = _apply_search_filter(list_q, search)
+    count_q = _apply_search_filter(count_q, search)
+
+    list_q = (
+        list_q.options(
             selectinload(SafetyReport.user).load_only(
                 User.name, User.employee_id, User.department, User.facility, User.phone
             )
         )
+        .order_by(_URGENCY_ORDER, SafetyReport.user_id)
+        .limit(limit)
+        .offset(offset)
     )
-    if facility:
-        query = query.where(SafetyReport.facility_snapshot == facility)
-    if department:
-        query = query.where(SafetyReport.department_snapshot == department)
-    result = await db.execute(query)
-    return [_report_to_response(r) for r in result.scalars().all()]
+
+    total = (await db.execute(count_q)).scalar_one()
+    items = (await db.execute(list_q)).scalars().all()
+
+    return PaginatedReports(
+        items=[_report_to_response(r) for r in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

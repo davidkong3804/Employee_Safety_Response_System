@@ -52,6 +52,13 @@ export interface DepartmentStats {
   unreported: number
 }
 
+export interface PaginatedReports {
+  items: SafetyReport[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface UserFull {
   id: string
   employee_id: string
