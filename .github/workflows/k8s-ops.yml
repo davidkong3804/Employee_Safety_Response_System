@@ -1,0 +1,207 @@
+name: K8s Ops (manual) → GKE
+
+# Manually-triggered cluster operations. Mirrors the auth setup of
+# load-test.yml so the same GCP_SA_KEY / GKE cluster naming applies.
+#
+# Trigger from: Actions tab → "K8s Ops (manual) → GKE" → "Run workflow"
+# then pick an action:
+#
+#   apply-monitoring  Deploy / refresh Prometheus + Grafana stack and the
+#                     updated NetworkPolicy. Safe to re-run (kubectl apply
+#                     is idempotent; ConfigMap updates trigger pod
+#                     restart via configmap-version annotation).
+#
+#   rerun-db-init     Delete + recreate the db-init Job, then wait for
+#                     completion. Needed after any schema change in
+#                     init_db.py / apply_pending_migrations(). See
+#                     docs/runbook.md Scenario A.
+#
+#   apply-all         kubectl apply -f k8s/ (everything). The numbered
+#                     prefix ensures correct order. Use when bootstrapping
+#                     a fresh cluster or recovering from manual drift.
+#
+#   diagnose          Read-only: prints pods, deployments, HPA, recent
+#                     events, db-init Job status, current backend image.
+#                     Use to confirm cluster health before/after a deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Which operation to run'
+        required: true
+        type: choice
+        default: 'diagnose'
+        options:
+          - diagnose
+          - apply-monitoring
+          - rerun-db-init
+          - apply-all
+      restart_backend:
+        description: 'Also rollout-restart backend after apply (forces re-pull of :latest)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  k8s-ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NAMESPACE: safety-system
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: safety-response
+          location: asia-east1-a
+
+      - name: Show selected action
+        run: |
+          echo "## K8s Ops — ${{ inputs.action }}" >> $GITHUB_STEP_SUMMARY
+          echo "- namespace: $NAMESPACE" >> $GITHUB_STEP_SUMMARY
+          echo "- restart_backend: ${{ inputs.restart_backend }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      # ------------------------------------------------------------------
+      # Each step below is gated on `if: inputs.action == '...'` so only
+      # the matching block runs. Putting them in one job (rather than four
+      # jobs guarded by `if:` at job level) keeps GCP auth + kubeconfig
+      # set up once instead of four times.
+      # ------------------------------------------------------------------
+
+      # --- diagnose -----------------------------------------------------
+      - name: Diagnose — current state
+        if: inputs.action == 'diagnose'
+        run: |
+          echo "::group::Deployments"
+          kubectl -n "$NAMESPACE" get deploy -o wide
+          echo "::endgroup::"
+
+          echo "::group::Pods (with node + zone)"
+          kubectl -n "$NAMESPACE" get pod -o wide
+          echo "::endgroup::"
+
+          echo "::group::HPA"
+          kubectl -n "$NAMESPACE" get hpa
+          echo "::endgroup::"
+
+          echo "::group::Jobs (db-init)"
+          kubectl -n "$NAMESPACE" get job db-init -o wide 2>/dev/null || echo "no db-init Job"
+          kubectl -n "$NAMESPACE" describe job db-init 2>/dev/null | tail -30 || true
+          echo "::endgroup::"
+
+          echo "::group::Services"
+          kubectl -n "$NAMESPACE" get svc
+          echo "::endgroup::"
+
+          echo "::group::Ingress"
+          kubectl -n "$NAMESPACE" get ingress
+          echo "::endgroup::"
+
+          echo "::group::Recent events (warning + error only)"
+          kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp \
+            --field-selector type!=Normal | tail -30
+          echo "::endgroup::"
+
+          {
+            echo "### Currently-running images"
+            echo '```'
+            kubectl -n "$NAMESPACE" get deploy -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[*].image --no-headers
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      # --- apply-monitoring --------------------------------------------
+      - name: Apply — monitoring stack + updated NetworkPolicy
+        if: inputs.action == 'apply-monitoring'
+        run: |
+          kubectl apply -f k8s/11-network-policy.yaml
+          kubectl apply -f k8s/14-prometheus.yaml
+          kubectl apply -f k8s/15-grafana.yaml
+          echo
+          echo "Waiting for rollouts..."
+          kubectl -n "$NAMESPACE" rollout status deployment/prometheus --timeout=180s
+          kubectl -n "$NAMESPACE" rollout status deployment/grafana    --timeout=180s
+          echo
+          kubectl -n "$NAMESPACE" get pod -l app=prometheus -o wide
+          kubectl -n "$NAMESPACE" get pod -l app=grafana    -o wide
+
+          {
+            echo "### Monitoring deployed"
+            echo "- Grafana svc: \`grafana.safety-system.svc.cluster.local:3000\`"
+            echo "- Prometheus svc: \`prometheus.safety-system.svc.cluster.local:9090\`"
+            echo ""
+            echo "Open from your laptop:"
+            echo '```'
+            echo "kubectl -n safety-system port-forward svc/grafana 3001:3000"
+            echo "kubectl -n safety-system port-forward svc/prometheus 9090:9090"
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      # --- rerun-db-init -----------------------------------------------
+      - name: Rerun — db-init Job
+        if: inputs.action == 'rerun-db-init'
+        run: |
+          # Job specs are immutable: delete + apply is the only way to re-run.
+          kubectl -n "$NAMESPACE" delete job db-init --ignore-not-found
+          kubectl apply -f k8s/05-db-init-job.yaml
+
+          # Wait for completion. backoffLimit on the Job (10) means it
+          # will retry transient DB hiccups on its own; we just wait.
+          if kubectl -n "$NAMESPACE" wait --for=condition=complete job/db-init --timeout=300s; then
+            echo "✅ db-init completed"
+          else
+            echo "❌ db-init did not complete in 300s — dumping logs"
+            kubectl -n "$NAMESPACE" describe job db-init | tail -30
+            kubectl -n "$NAMESPACE" logs job/db-init --tail=100 || true
+            exit 1
+          fi
+
+          # Print the last 30 lines so the "Pending migrations applied"
+          # line shows up in the workflow log.
+          echo
+          echo "::group::db-init logs (last 30 lines)"
+          kubectl -n "$NAMESPACE" logs job/db-init --tail=30
+          echo "::endgroup::"
+
+          {
+            echo "### db-init Job complete"
+            echo "Last 10 log lines:"
+            echo '```'
+            kubectl -n "$NAMESPACE" logs job/db-init --tail=10
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      # --- apply-all ----------------------------------------------------
+      - name: Apply — everything in k8s/
+        if: inputs.action == 'apply-all'
+        run: |
+          # 02-secret.yaml is gitignored (template only). Skip via `--prune`
+          # is risky here; rely on the fact that the file does not exist
+          # in the checkout, so kubectl apply -f k8s/ silently skips it.
+          if [ -f k8s/02-secret.yaml ]; then
+            echo "::warning::k8s/02-secret.yaml present in checkout — will be applied"
+          else
+            echo "k8s/02-secret.yaml not in checkout (gitignored) — secret in cluster preserved"
+          fi
+
+          kubectl apply -f k8s/
+          echo
+          kubectl -n "$NAMESPACE" get deploy
+
+      # --- optional rollout restart ------------------------------------
+      - name: Rollout-restart backend (force re-pull :latest)
+        if: inputs.restart_backend == true
+        run: |
+          kubectl -n "$NAMESPACE" rollout restart deployment/backend
+          kubectl -n "$NAMESPACE" rollout status  deployment/backend --timeout=300s
+          echo
+          kubectl -n "$NAMESPACE" get pod -l app=backend -o wide
