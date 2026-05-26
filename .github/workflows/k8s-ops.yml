@@ -20,6 +20,11 @@ name: K8s Ops (manual) → GKE
 #                     prefix ensures correct order. Use when bootstrapping
 #                     a fresh cluster or recovering from manual drift.
 #
+#   prune-users       Delete employee accounts beyond LOAD_TEST_MAX_EMPLOYEES
+#                     (see backend/app/prune_users.py). Use after lowering
+#                     the cap so the DB matches the new config. Safe to
+#                     re-run; idempotent.
+#
 #   diagnose          Read-only: prints pods, deployments, HPA, recent
 #                     events, db-init Job status, current backend image.
 #                     Use to confirm cluster health before/after a deploy.
@@ -36,6 +41,7 @@ on:
           - apply-monitoring
           - rerun-db-init
           - apply-all
+          - prune-users
       restart_backend:
         description: 'Also rollout-restart backend after apply (forces re-pull of :latest)'
         required: false
@@ -196,6 +202,34 @@ jobs:
           kubectl apply -f k8s/
           echo
           kubectl -n "$NAMESPACE" get deploy
+
+      # --- prune-users --------------------------------------------------
+      - name: Prune — surplus load-test employees
+        if: inputs.action == 'prune-users'
+        run: |
+          # Run inside an existing backend pod instead of a new Job.
+          # Reason: NetworkPolicy only allows egress to postgres/redis/DNS for
+          # pods labelled app=backend. A new pod with app=prune-users would be
+          # blocked by the default-deny-all policy before it can reach the DB.
+          # kubectl exec reuses the pod's established network identity.
+          POD=$(kubectl -n "$NAMESPACE" get pod -l app=backend \
+            --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          if [ -z "$POD" ]; then
+            echo "❌ No running backend pod found — is the backend deployment healthy?"
+            kubectl -n "$NAMESPACE" get pod -l app=backend
+            exit 1
+          fi
+
+          echo "Running prune on pod: $POD"
+          echo
+          kubectl -n "$NAMESPACE" exec "$POD" -- python -m app.prune_users --apply
+
+          {
+            echo "### prune-users complete"
+            echo "Ran inside pod \`$POD\`"
+          } >> $GITHUB_STEP_SUMMARY
 
       # --- optional rollout restart ------------------------------------
       - name: Rollout-restart backend (force re-pull :latest)
