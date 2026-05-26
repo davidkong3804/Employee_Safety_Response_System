@@ -16,6 +16,7 @@ export default function ReportPage() {
   const [myReport, setMyReport] = useState<SafetyReport | null>(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
 
   useEffect(() => {
@@ -30,17 +31,18 @@ export default function ReportPage() {
   }, [eventId])
 
   const handleReport = async (status: 'safe' | 'need_help') => {
-    if (!eventId) return
+    if (!eventId || submitted) return
+    // Optimistic lock — hides the buttons immediately so a tap and a
+    // delayed second tap can't both fire before React renders loading=true.
+    setSubmitted(true)
     setLoading(true)
     try {
       const report = await submitReport(eventId, { status, message: message || undefined })
       setMyReport(report)
       toast.success(t('report.submitted'))
-      // Auto-refresh: hop back to Home so the user immediately sees the
-      // updated event list / reminder banner state. Home keys off
-      // location.key so the events list re-fetches.
       navigate('/', { state: { refresh: true } })
     } catch {
+      setSubmitted(false)  // let the user retry on error
       toast.error(t('report.failed'))
     } finally {
       setLoading(false)
@@ -55,7 +57,7 @@ export default function ReportPage() {
     )
   }
 
-  const alreadyReported = myReport?.status !== null && myReport?.status !== undefined
+  const alreadyReported = submitted || (myReport?.status !== null && myReport?.status !== undefined)
 
   return (
     <div className="max-w-lg mx-auto p-6">

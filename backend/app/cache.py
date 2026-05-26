@@ -177,6 +177,26 @@ async def buffer_report(
         return False
 
 
+async def get_buffered_report(event_id: str, user_id: str) -> dict | None:
+    """Read one buffered report without consuming it.
+
+    Called by get_my_report so a read immediately after a buffered write
+    returns the not-yet-flushed status instead of the stale DB null.
+    """
+    if _DISABLED:
+        return None
+    try:
+        client = _get_client()
+        buf_key = f"buf:report:{event_id}:{user_id}"
+        data = await client.hgetall(buf_key)
+        if data and data.get("status"):
+            return data
+        return None
+    except Exception as exc:
+        log.debug("get_buffered_report(%s/%s) failed: %s", event_id, user_id, exc)
+        return None
+
+
 async def drain_event_buffer(event_id: str) -> int:
     """Drain all buffered reports for *event_id* into PostgreSQL.
 

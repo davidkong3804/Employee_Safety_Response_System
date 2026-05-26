@@ -24,6 +24,7 @@
   },
   "report": {
     "title": "安全回報",
+    "update": "更新回報",
     "imSafe": "我是安全的",
     "needHelp": "需要協助",
     "message": "附加訊息（選填）",
@@ -31,6 +32,9 @@
     "failed": "回報失敗，請重試",
     "alreadyReported": "您已回報",
     "status": "您的狀態"
+  },
+  "peers": {
+    "title": "同事狀態"
   },
   "status": {
     "safe": "安全",

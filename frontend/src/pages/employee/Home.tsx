@@ -1,28 +1,43 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, Users } from 'lucide-react'
 import { listEvents } from '../../api/events'
+import { getMyReport } from '../../api/reports'
 import { getMyReminders, type MyReminder } from '../../api/reminders'
 import { useAuth } from '../../contexts/AuthContext'
 import ReminderModal from '../../components/ReminderModal'
-import type { Event } from '../../types'
+import StatusBadge from '../../components/StatusBadge'
+import type { Event, SafetyReport } from '../../types'
 
 export default function Home() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const location = useLocation()
   const [events, setEvents] = useState<Event[]>([])
+  const [myReports, setMyReports] = useState<Record<string, SafetyReport | null>>({})
   const [loading, setLoading] = useState(true)
   const [modalReminders, setModalReminders] = useState<MyReminder[] | null>(null)
 
-  // Re-fetch events whenever Home mounts OR ReportPage navigates back with
-  // `{ state: { refresh: true } }` after a successful report. `location.key`
-  // changes on every navigation so this also covers re-entering from any
-  // other page.
+  // Re-fetch events (and per-event report status) whenever Home mounts or the
+  // user navigates back here. `location.key` changes on every navigation.
   useEffect(() => {
     setLoading(true)
-    listEvents().then(setEvents).finally(() => setLoading(false))
+    listEvents().then(async (evts) => {
+      setEvents(evts)
+      const active = evts.filter(e => e.status === 'active')
+      const pairs = await Promise.all(
+        active.map(async (ev) => {
+          try {
+            const rpt = await getMyReport(ev.id)
+            return [ev.id, rpt] as [string, SafetyReport | null]
+          } catch {
+            return [ev.id, null] as [string, null]
+          }
+        })
+      )
+      setMyReports(Object.fromEntries(pairs))
+    }).finally(() => setLoading(false))
   }, [location.key])
 
   // Show the reminder modal ONCE per login, on the first visit to Home.
@@ -81,37 +96,59 @@ export default function Home() {
             {t('event.active')}
           </h2>
           <div className="space-y-4">
-            {activeEvents.map(event => (
-              <div key={event.id} className={`border-l-4 rounded-lg p-6 shadow-sm ${severityColors[event.severity]}`}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className={`w-5 h-5 ${severityIcons[event.severity]}`} />
-                      <h3 className="text-lg font-bold">{event.title}</h3>
+            {activeEvents.map(event => {
+              const myReport = myReports[event.id]
+              const hasReported = myReport?.status != null
+
+              return (
+                <div key={event.id} className={`border-l-4 rounded-lg p-6 shadow-sm ${severityColors[event.severity]}`}>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className={`w-5 h-5 ${severityIcons[event.severity]}`} />
+                        <h3 className="text-lg font-bold">{event.title}</h3>
+                      </div>
+                      <p className="text-gray-600 mt-1">{event.description}</p>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          {new Date(event.created_at).toLocaleString()}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-red-200 text-red-800 text-xs font-medium">
+                          {t(`event.severities.${event.severity}`)}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-gray-600 mt-1">{event.description}</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {new Date(event.created_at).toLocaleString()}
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-red-200 text-red-800 text-xs font-medium">
-                        {t(`event.severities.${event.severity}`)}
-                      </span>
-                    </div>
+                    {hasReported && (
+                      <div className="flex-shrink-0 ml-4 mt-1">
+                        <StatusBadge status={myReport!.status} size="sm" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 mt-4">
+                    <Link
+                      to={`/events/${event.id}/report`}
+                      className={`flex-1 text-center py-3 rounded-lg font-medium transition text-lg flex items-center justify-center gap-2 ${
+                        hasReported
+                          ? 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                          : 'bg-blue-900 text-white hover:bg-blue-800'
+                      }`}
+                    >
+                      {hasReported && <CheckCircle className="w-5 h-5 text-green-600" />}
+                      {hasReported ? t('report.update') : t('report.title')}
+                    </Link>
+                    <Link
+                      to={`/events/${event.id}/peers`}
+                      className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition"
+                    >
+                      <Users className="w-5 h-5" />
+                      {t('peers.title')}
+                    </Link>
                   </div>
                 </div>
-
-                <div className="flex gap-3 mt-4">
-                  <Link
-                    to={`/events/${event.id}/report`}
-                    className="flex-1 text-center py-3 bg-blue-900 text-white rounded-lg font-medium hover:bg-blue-800 transition text-lg"
-                  >
-                    {t('report.title')}
-                  </Link>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

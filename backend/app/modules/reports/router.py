@@ -7,7 +7,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.cache import buffer_report, cache_get_json, cache_invalidate_pattern, cache_set_json
+from app.cache import buffer_report, cache_get_json, cache_invalidate_pattern, cache_set_json, get_buffered_report
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.modules.reports.models import SafetyReport
@@ -165,6 +165,12 @@ async def get_my_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Check the Redis write buffer first. When a report was just submitted
+    # via the buffered path, the DB row still has status=null until the
+    # 2-second drainer fires. Without this, navigating away and back to
+    # ReportPage would show the submit buttons again (read-after-write gap).
+    buffered = await get_buffered_report(str(event_id), str(current_user.id))
+
     result = await db.execute(
         select(SafetyReport)
         .where(
@@ -180,7 +186,17 @@ async def get_my_report(
     report = result.scalar_one_or_none()
     if not report:
         return None
-    return _report_to_response(report)
+
+    response = _report_to_response(report)
+    if buffered:
+        # Overlay the not-yet-flushed data so the caller sees what they just wrote.
+        response.status = buffered["status"]
+        response.message = buffered.get("message") or response.message
+        try:
+            response.reported_at = datetime.fromisoformat(buffered["reported_at"])
+        except (KeyError, ValueError):
+            pass
+    return response
 
 
 @router.get("/{event_id}/stats", response_model=EventStats)

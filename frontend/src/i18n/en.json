@@ -24,6 +24,7 @@
   },
   "report": {
     "title": "Safety Report",
+    "update": "Update Report",
     "imSafe": "I'm Safe",
     "needHelp": "Need Help",
     "message": "Additional message (optional)",
@@ -31,6 +32,9 @@
     "failed": "Report failed, please retry",
     "alreadyReported": "You have already reported",
     "status": "Your Status"
+  },
+  "peers": {
+    "title": "Team Status"
   },
   "status": {
     "safe": "Safe",
