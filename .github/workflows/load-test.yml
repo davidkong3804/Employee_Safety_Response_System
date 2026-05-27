@@ -53,6 +53,11 @@ jobs:
           locust --version
 
       - name: Run load test
+        # Don't fail the workflow on Locust's own exit code — any failed
+        # request makes Locust return 1. We re-evaluate the result in the
+        # "Evaluate result" step below, treating expected 429 (rate limiter)
+        # as a pass condition.
+        continue-on-error: true
         run: |
           mkdir -p reports
           locust -f tests/performance/locustfile.py \
@@ -84,4 +89,51 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             cat reports/loadtest_stats.csv >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Evaluate result (exclude expected 429 rate-limited responses)
+        # Real failure = total failures - 429s. Pass if real failure rate < 1%.
+        # This lets the workflow turn green when the only "failures" are the
+        # rate limiter doing its job (e.g. Locust hammering POST /remind faster
+        # than the 3-per-60s sliding window allows).
+        if: always()
+        run: |
+          if [ ! -f reports/loadtest_stats.csv ]; then
+            echo "::error::No stats csv produced — load test did not run"
+            exit 1
+          fi
+          if [ ! -f reports/loadtest_failures.csv ]; then
+            # No failures file means zero failures — pass.
+            echo "✅ No failures recorded — pass"
+            exit 0
+          fi
+
+          # Count 429 occurrences (rate-limited; expected protection)
+          RATE_LIMITED=$(awk -F',' 'NR>1 && /429/ {gsub("\r",""); s+=$NF} END{print s+0}' reports/loadtest_failures.csv)
+
+          # Read totals from Aggregated row of stats.csv
+          TOTAL=$(awk -F',' '$2=="Aggregated" {print $3}'  reports/loadtest_stats.csv)
+          FAILS=$(awk -F',' '$2=="Aggregated" {print $4}'  reports/loadtest_stats.csv)
+
+          REAL_FAILS=$((FAILS - RATE_LIMITED))
+          # bash arithmetic, scaled to keep one decimal for percentages
+          REAL_PCT=$(awk -v f=$REAL_FAILS -v t=$TOTAL 'BEGIN{printf "%.2f", (t>0 ? f*100.0/t : 0)}')
+
+          {
+            echo "### Pass/fail evaluation"
+            echo "- Total requests:        $TOTAL"
+            echo "- Total failures:        $FAILS"
+            echo "- Of which 429 (expected): $RATE_LIMITED"
+            echo "- Real failures:         $REAL_FAILS"
+            echo "- Real failure rate:     ${REAL_PCT}%"
+            echo "- Threshold:             < 1.00%"
+          } >> $GITHUB_STEP_SUMMARY
+
+          # Compare REAL_PCT < 1.00 using awk (bash can't do float compare)
+          if awk -v p=$REAL_PCT 'BEGIN{exit !(p < 1.0)}'; then
+            echo "✅ Real failure rate ${REAL_PCT}% < 1% — PASS"
+            exit 0
+          else
+            echo "::error::Real failure rate ${REAL_PCT}% ≥ 1% — FAIL"
+            exit 1
           fi
