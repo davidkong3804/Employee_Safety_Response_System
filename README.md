@@ -7,7 +7,7 @@
 [![Tech Stack: FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://employee-safety.duckdns.org/docs)
 [![Tech Stack: React SPA](https://img.shields.io/badge/Frontend-React_18-61DAFB?style=flat-square&logo=react&logoColor=white)](https://employee-safety.duckdns.org/)
 
-本專案為 **台灣大學雲原生架構與實踐期末專案特優之作**（以台積電 TSMC 評審與期末高難度指標設計），專為企業在遭遇重大天災（如強震、火災、資安事故）時，提供瞬時高併發的**一鍵安全回報**、**即時災情數據統計**、**主管部門催報**，以及**跨維度雲原生監控與自癒體系**。
+本專案為 **台灣大學雲原生架構與實踐期末專案**，專為企業在遭遇重大天災（如強震、火災、資安事故）時，提供瞬時高併發的**一鍵安全回報**、**即時災情數據統計**、**主管部門催報**，以及**跨維度雲原生監控與自癒體系**。
 
 ---
 
