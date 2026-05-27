@@ -2,7 +2,8 @@
   "common": {
     "actions": "Actions",
     "status": "Status",
-    "retry": "Retry"
+    "retry": "Retry",
+    "close": "Close"
   },
   "app": {
     "title": "Safety Response System",
@@ -33,6 +34,7 @@
     "failed": "Report failed, please retry",
     "failedNetwork": "Connection unstable. Check your network and retry.",
     "failedServer": "Server busy. Please try again shortly.",
+    "failedRateLimit": "Too many requests, please try again later",
     "failedAmbiguous": "Submission error. Return to home to confirm your status.",
     "alreadyReported": "You have already reported",
     "status": "Your Status",
@@ -100,7 +102,8 @@
     "showing": "Showing {{shown}} / {{total}}",
     "searchPlaceholder": "Search name or ID",
     "noResults": "No matching reports",
-    "note": "Note"
+    "note": "Note",
+    "remarkFrom": "Message from {{name}}"
   },
   "user": {
     "create": "Create User",
@@ -118,6 +121,7 @@
     "deactivateFailed": "Failed to deactivate user",
     "deactivateConfirm": "Deactivate this user? They will no longer be able to log in.",
     "creating": "Creating...",
+    "noUsers": "No matching users found",
     "roles": {
       "admin": "Admin",
       "manager": "Manager",
@@ -155,6 +159,7 @@
     "japan": "Japan",
     "kumamoto": "Kumamoto",
     "germany": "Germany",
-    "dresden": "Saxony / Dresden"
+    "dresden": "Saxony / Dresden",
+    "fabsCount": "({{count}} fabs)"
   }
 }

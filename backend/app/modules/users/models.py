@@ -24,5 +24,5 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    manager = relationship("User", remote_side="User.id", back_populates="subordinates", lazy="selectin")
-    subordinates = relationship("User", back_populates="manager", remote_side="User.manager_id", lazy="selectin")
+    manager = relationship("User", remote_side="User.id", back_populates="subordinates", lazy="select")
+    subordinates = relationship("User", back_populates="manager", remote_side="User.manager_id", lazy="select")

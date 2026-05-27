@@ -15,37 +15,84 @@ export default function Analytics() {
   const [statsMap, setStatsMap] = useState<Record<string, EventStats>>({})
   const [totalUsers, setTotalUsers] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     const load = async () => {
-      const [evts, users] = await Promise.all([listEvents(), listUsers()])
-      setEvents(evts)
-      setTotalUsers(users.length)
+      setLoading(true)
+      setError(false)
+      try {
+        const [evts, users] = await Promise.all([listEvents(), listUsers()])
+        setEvents(evts)
+        setTotalUsers(users.length)
 
-      const statsEntries = await Promise.all(
-        evts.map(async ev => {
-          try {
-            const s = await getEventStats(ev.id)
-            return [ev.id, s] as const
-          } catch {
-            return null
-          }
-        })
-      )
-      const map: Record<string, EventStats> = {}
-      for (const entry of statsEntries) {
-        if (entry) map[entry[0]] = entry[1]
+        const statsEntries = await Promise.all(
+          evts.map(async ev => {
+            try {
+              const s = await getEventStats(ev.id)
+              return [ev.id, s] as const
+            } catch {
+              return null
+            }
+          })
+        )
+        const map: Record<string, EventStats> = {}
+        for (const entry of statsEntries) {
+          if (entry) map[entry[0]] = entry[1]
+        }
+        setStatsMap(map)
+      } catch (err) {
+        console.error('Failed to load analytics data:', err)
+        setError(true)
+      } finally {
+        setLoading(false)
       }
-      setStatsMap(map)
-      setLoading(false)
     }
     load()
-  }, [])
+  }, [retryCount])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 flex flex-col items-center justify-center min-h-[50vh] text-center animate-fade-in">
+        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl border border-gray-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-950 mb-2">{t('event.loadError')}</h1>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            Could not fetch analytics statistics from the server.
+          </p>
+          <button
+            onClick={() => setRetryCount(prev => prev + 1)}
+            className="w-full py-3 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded-xl shadow transition"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 animate-fade-in">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('analytics.title')}</h1>
+        <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100 flex flex-col items-center justify-center min-h-[40vh]">
+          <Activity className="w-16 h-16 text-gray-300 mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('event.noEvents')}</h2>
+          <p className="text-sm text-gray-500 leading-relaxed max-w-md">
+            Create an incident event in Event Management to start capturing and exploring safety report analytics.
+          </p>
+        </div>
       </div>
     )
   }
@@ -73,7 +120,7 @@ export default function Analytics() {
   ]
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6 animate-fade-in">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('analytics.title')}</h1>
 
       <div className="grid grid-cols-4 gap-4 mb-8">

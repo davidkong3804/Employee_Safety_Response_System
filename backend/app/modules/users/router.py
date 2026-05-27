@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import cache_invalidate_pattern
+from app.cache import cache_delete, cache_invalidate_pattern
 from app.database import get_db
 from app.dependencies import require_role
 from app.modules.auth.router import hash_password
@@ -38,7 +38,7 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("admin", "manager")),
 ):
-    query = select(User).order_by(User.name)
+    query = select(User).order_by(User.employee_id)
     if role:
         query = query.where(User.role == role)
     if facility:
@@ -95,7 +95,7 @@ async def update_user(
 
     await db.flush()
     await db.refresh(user)
-    await cache_invalidate_pattern(f"user:profile:{user_id}")
+    await cache_delete(f"user:profile:{user_id}")
     return _user_to_response(user)
 
 
@@ -111,4 +111,4 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     user.is_active = False
     await db.flush()
-    await cache_invalidate_pattern(f"user:profile:{user_id}")
+    await cache_delete(f"user:profile:{user_id}")

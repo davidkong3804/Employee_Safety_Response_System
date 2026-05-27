@@ -29,7 +29,7 @@ async def _get_user_by_id(user_id: str, db: AsyncSession) -> User | None:
             and isinstance(cached_user["manager_id"], str)
         ):
             cached_user["manager_id"] = uuid.UUID(cached_user["manager_id"])
-        return User(**cached_user)
+        return User(**cached_user, password_hash="")
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -45,7 +45,7 @@ async def _get_user_by_id(user_id: str, db: AsyncSession) -> User | None:
             "phone": user.phone,
             "manager_id": str(user.manager_id) if user.manager_id else None,
             "is_active": user.is_active,
-            "password_hash": user.password_hash,
+
         }
         await cache_set_json(cache_key, user_dict, ttl_seconds=USER_PROFILE_TTL)
     return user

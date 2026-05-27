@@ -45,10 +45,16 @@ def _apply_search_filter(query, search: str | None, already_joined: bool = False
     BOTH the list query and the count query so totals stay consistent."""
     if not search:
         return query
-    term = f"%{search}%"
+    escaped_search = search.replace("/", "//").replace("%", "/%").replace("_", "/_")
+    term = f"%{escaped_search}%"
     if not already_joined:
         query = query.join(User, User.id == SafetyReport.user_id)
-    return query.where(or_(User.name.ilike(term), User.employee_id.ilike(term)))
+    return query.where(
+        or_(
+            User.name.ilike(term, escape="/"),
+            User.employee_id.ilike(term, escape="/"),
+        )
+    )
 
 
 # need_help with remarks → need_help → unreported → safe. Surfaces actionable rows first on the

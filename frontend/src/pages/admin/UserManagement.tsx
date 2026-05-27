@@ -5,6 +5,18 @@ import { Plus, X } from 'lucide-react'
 import { listUsers, createUser, deleteUser } from '../../api/users'
 import type { UserFull } from '../../types'
 
+function formatPhone(phone: string | null | undefined): string {
+  if (!phone) return ''
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('8869')) {
+    return `09${digits.slice(3, 7)}-${digits.slice(7, 10)}-${digits.slice(10)}`
+  }
+  if (digits.length === 10 && digits.startsWith('09')) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  return phone
+}
+
 export default function UserManagement() {
   const { t } = useTranslation()
   const [users, setUsers] = useState<UserFull[]>([])
@@ -12,10 +24,12 @@ export default function UserManagement() {
   const [showCreate, setShowCreate] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [filterRole, setFilterRole] = useState('')
-  const [form, setForm] = useState({
+  
+  const initialForm = {
     employee_id: '', name: '', email: '', password: 'password123',
-    role: 'employee', department: '', facility: '', phone: '',
-  })
+    role: 'employee' as 'employee' | 'manager' | 'admin', department: '', facility: '', phone: '',
+  }
+  const [form, setForm] = useState(initialForm)
 
   // Returns the underlying promise so callers (e.g. handleCreate) can
   // `await load()` and only act after the refetch lands.
@@ -24,6 +38,11 @@ export default function UserManagement() {
   }
 
   useEffect(() => { void load() }, [filterRole])
+
+  const closeModal = () => {
+    setShowCreate(false)
+    setForm(initialForm)
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,7 +54,7 @@ export default function UserManagement() {
       // Refetch BEFORE closing the modal so the new user is already in
       // the table when the dialog dismisses — no flicker.
       await load()
-      setShowCreate(false)
+      closeModal()
     } catch {
       toast.error(t('user.createFailed'))
     } finally {
@@ -81,18 +100,20 @@ export default function UserManagement() {
       </div>
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg">
-            <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl border border-gray-100 transform transition-all scale-100">
+            <div className="flex items-center justify-between mb-4 border-b pb-3">
               <h2 className="text-lg font-bold">{t('user.create')}</h2>
-              <button onClick={() => setShowCreate(false)}><X className="w-5 h-5" /></button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-lg transition">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <input value={form.employee_id} onChange={e => setForm({...form, employee_id: e.target.value})} placeholder={t('login.employeeId')} className="px-3 py-2 border rounded-lg" required />
                 <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder={t('user.name')} className="px-3 py-2 border rounded-lg" required />
                 <input value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder={t('user.email')} className="px-3 py-2 border rounded-lg" required type="email" />
-                <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="px-3 py-2 border rounded-lg">
+                <select value={form.role} onChange={e => setForm({...form, role: e.target.value as 'employee' | 'manager' | 'admin'})} className="px-3 py-2 border rounded-lg">
                   <option value="employee">{t('user.roles.employee')}</option>
                   <option value="manager">{t('user.roles.manager')}</option>
                   <option value="admin">{t('user.roles.admin')}</option>
@@ -124,39 +145,53 @@ export default function UserManagement() {
               <th className="px-4 py-3 whitespace-nowrap">{t('user.role')}</th>
               <th className="px-4 py-3 whitespace-nowrap">{t('user.department')}</th>
               <th className="px-4 py-3 whitespace-nowrap">{t('user.facility')}</th>
+              <th className="px-4 py-3 whitespace-nowrap">{t('user.phone')}</th>
               <th className="px-4 py-3 whitespace-nowrap">{t('common.status')}</th>
               <th className="px-4 py-3 whitespace-nowrap">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {users.map(u => (
-              <tr key={u.id} className={!u.is_active ? 'opacity-50' : ''}>
-                <td className="px-4 py-3 text-sm font-mono">{u.employee_id}</td>
-                <td className="px-4 py-3 font-medium">{u.name}</td>
-                <td className="px-4 py-3 text-sm">{u.email}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    u.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                    u.role === 'manager' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>{u.role}</span>
-                </td>
-                <td className="px-4 py-3 text-sm">{u.department}</td>
-                <td className="px-4 py-3 text-sm">{u.facility}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs ${u.is_active ? 'text-green-600' : 'text-red-600'}`}>
-                    {u.is_active ? t('user.active') : t('user.inactive')}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {u.is_active && (
-                    <button onClick={() => handleDeactivate(u.id)} className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200">
-                      {t('user.inactive')}
-                    </button>
-                  )}
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
+                  <div className="flex flex-col items-center justify-center">
+                    <Plus className="w-8 h-8 text-gray-300 mb-2" />
+                    <p className="font-semibold text-base">{t('user.noUsers')}</p>
+                    <p className="text-xs text-gray-400 mt-1">Try changing the filter or create a new user.</p>
+                  </div>
                 </td>
               </tr>
-            ))}
+            ) : (
+              users.map(u => (
+                <tr key={u.id} className={!u.is_active ? 'opacity-50' : ''}>
+                  <td className="px-4 py-3 text-sm font-mono">{u.employee_id}</td>
+                  <td className="px-4 py-3 font-medium">{u.name}</td>
+                  <td className="px-4 py-3 text-sm">{u.email}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      u.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                      u.role === 'manager' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>{t(`user.roles.${u.role}`)}</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{u.department}</td>
+                  <td className="px-4 py-3 text-sm">{u.facility}</td>
+                  <td className="px-4 py-3 text-sm">{formatPhone(u.phone)}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs ${u.is_active ? 'text-green-600' : 'text-red-600'}`}>
+                      {u.is_active ? t('user.active') : t('user.inactive')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.is_active && (
+                      <button onClick={() => handleDeactivate(u.id)} className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200">
+                        {t('user.inactive')}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

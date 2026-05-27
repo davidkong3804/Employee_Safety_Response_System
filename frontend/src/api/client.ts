@@ -52,6 +52,13 @@ client.interceptors.response.use(
       }
     }
 
+    // Surface rate-limit to callers with a clear message for toast display.
+    if (error.response?.status === 429) {
+      const detail = (error.response.data as Record<string, string>)?.detail || 'Too many requests'
+      error.message = detail
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
       localStorage.removeItem('token')
       window.location.href = '/login'

@@ -123,6 +123,20 @@ async def cache_invalidate_pattern(pattern: str) -> None:
         log.debug("cache_invalidate_pattern(%s) failed: %s", pattern, exc)
 
 
+async def cache_delete(key: str) -> None:
+    """Delete a specific key from the cache.
+
+    Faster and more efficient than scan-based invalidation when we know the exact key.
+    Failures are silently ignored.
+    """
+    if _DISABLED:
+        return
+    try:
+        await _get_client().delete(key)
+    except Exception as exc:
+        log.debug("cache_delete(%s) failed: %s", key, exc)
+
+
 # ---------------------------------------------------------------------------
 # Write buffer — absorbs concurrent safety-report submissions under spike load.
 #
@@ -316,4 +330,4 @@ async def _batch_update_db(event_id: str, records: list[dict]) -> int:
     async with async_session() as session:
         result = await session.execute(sql, params)
         await session.commit()
-        return result.rowcount or len(records)
+        return result.rowcount if result.rowcount is not None else 0

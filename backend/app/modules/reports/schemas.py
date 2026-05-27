@@ -1,10 +1,11 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 
 class ReportSubmit(BaseModel):
-    status: str  # "safe" or "need_help"
+    status: Literal["safe", "need_help"]
     message: str | None = None
 
 

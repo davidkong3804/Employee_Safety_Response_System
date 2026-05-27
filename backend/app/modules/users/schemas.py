@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, field_validator
 
 
@@ -17,7 +18,7 @@ class UserCreate(BaseModel):
     name: str
     email: str
     password: str
-    role: str
+    role: Literal["employee", "manager", "admin"]
     department: str | None = None
     facility: str | None = None
     phone: str | None = None
@@ -32,7 +33,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
-    role: str | None = None
+    role: Literal["employee", "manager", "admin"] | None = None
     department: str | None = None
     facility: str | None = None
     phone: str | None = None

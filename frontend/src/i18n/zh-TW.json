@@ -2,7 +2,8 @@
   "common": {
     "actions": "操作",
     "status": "狀態",
-    "retry": "重試"
+    "retry": "重試",
+    "close": "關閉"
   },
   "app": {
     "title": "企業安全回報系統",
@@ -33,6 +34,7 @@
     "failed": "回報失敗，請重試",
     "failedNetwork": "網路不穩，請檢查連線後重試",
     "failedServer": "伺服器暫時忙碌，請稍後再試",
+    "failedRateLimit": "請求過於頻繁，請稍後再試",
     "failedAmbiguous": "送出時發生錯誤，請回首頁確認狀態",
     "alreadyReported": "您已回報",
     "status": "您的狀態",
@@ -100,7 +102,8 @@
     "showing": "顯示 {{shown}} / {{total}} 筆",
     "searchPlaceholder": "搜尋姓名或工號",
     "noResults": "沒有符合條件的回報",
-    "note": "備註"
+    "note": "備註",
+    "remarkFrom": "來自 {{name}} 的說明"
   },
   "user": {
     "create": "新增使用者",
@@ -118,6 +121,7 @@
     "deactivateFailed": "停用使用者失敗",
     "deactivateConfirm": "確定要停用這位使用者嗎？停用後將無法登入。",
     "creating": "建立中...",
+    "noUsers": "沒有符合條件的使用者",
     "roles": {
       "admin": "管理員",
       "manager": "主管",
@@ -155,6 +159,7 @@
     "japan": "日本",
     "kumamoto": "熊本縣",
     "germany": "德國",
-    "dresden": "薩克森・德勒斯登"
+    "dresden": "薩克森・德勒斯登",
+    "fabsCount": "({{count}} 個廠區)"
   }
 }

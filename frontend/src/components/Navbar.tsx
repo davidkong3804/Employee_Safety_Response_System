@@ -39,6 +39,7 @@ export default function Navbar() {
               <>
                 <Link to="/admin/events" className="hover:text-yellow-300 transition">{t('nav.events')}</Link>
                 <Link to="/admin/users" className="hover:text-yellow-300 transition">{t('nav.users')}</Link>
+                <Link to="/admin/analytics" className="hover:text-yellow-300 transition">{t('nav.analytics')}</Link>
               </>
             )}
 

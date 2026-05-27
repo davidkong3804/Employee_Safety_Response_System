@@ -21,15 +21,21 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     if (!eventId) return
+    setError(false)
+    setPageLoading(true)
     Promise.all([
       getEvent(eventId),
       getMyReport(eventId),
     ]).then(([ev, rpt]) => {
       setEvent(ev)
       setMyReport(rpt)
+    }).catch(err => {
+      console.error('Failed to load event or report:', err)
+      setError(true)
     }).finally(() => setPageLoading(false))
   }, [eventId])
 
@@ -49,7 +55,9 @@ export default function ReportPage() {
       setSubmitted(false)  // let the user retry on error
       let msgKey = 'report.failed'
       if (isAxiosError(err)) {
-        if (!err.response || err.code === 'ECONNABORTED') {
+        if (err.response?.status === 429) {
+          msgKey = 'report.failedRateLimit'
+        } else if (!err.response || err.code === 'ECONNABORTED') {
           msgKey = 'report.failedNetwork'
         } else if (err.response.status === 500) {
           msgKey = 'report.failedAmbiguous'
@@ -69,6 +77,28 @@ export default function ReportPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900" />
+      </div>
+    )
+  }
+
+  if (error || !event) {
+    return (
+      <div className="max-w-md mx-auto p-6 flex flex-col items-center justify-center min-h-[50vh] text-center animate-fade-in">
+        <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-950 mb-2">{t('event.loadError')}</h1>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            The requested safety event could not be found or failed to load.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full py-3 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded-xl shadow transition"
+          >
+            {t('nav.home')}
+          </button>
+        </div>
       </div>
     )
   }
