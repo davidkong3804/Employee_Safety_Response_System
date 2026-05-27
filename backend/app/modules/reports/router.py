@@ -159,6 +159,9 @@ async def submit_report(
     if not report:
         raise HTTPException(status_code=404, detail="No report record found for this event")
 
+    from app.metrics import REPORTS_SUBMITTED
+    REPORTS_SUBMITTED.labels(status=data.status, facility=current_user.facility or "Unknown").inc()
+
     if buffered:
         # Buffered path: build response from current_user — no UPDATE, no
         # flush, no cache SCAN. The session has no pending changes so the

@@ -128,6 +128,8 @@ async def create_event(
         await db.execute(sa_insert(SafetyReport), placeholders)
 
     await cache_invalidate_pattern("events:list:*")
+    from app.metrics import ACTIVE_EVENTS
+    ACTIVE_EVENTS.labels(severity=event.severity).inc()
     return _event_to_response(event)
 
 
@@ -143,11 +145,16 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    was_active = event.status == "active"
+    old_severity = event.severity
+
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(event, field, value)
 
-    if data.status == "closed":
+    if data.status == "closed" and was_active:
         event.closed_at = datetime.now(timezone.utc)
+        from app.metrics import ACTIVE_EVENTS
+        ACTIVE_EVENTS.labels(severity=old_severity).dec()
 
     await db.flush()
     await db.refresh(event, attribute_names=["created_at"])
@@ -170,6 +177,10 @@ async def delete_event(
     # Delete related records first to avoid FK constraint violations
     await db.execute(delete(Reminder).where(Reminder.event_id == event_id))
     await db.execute(delete(SafetyReport).where(SafetyReport.event_id == event_id))
+    if event.status == "active":
+        from app.metrics import ACTIVE_EVENTS
+        ACTIVE_EVENTS.labels(severity=event.severity).dec()
+
     await db.delete(event)
     await cache_invalidate_pattern(f"stats:event:{event_id}:*")
     await cache_invalidate_pattern("events:list:*")

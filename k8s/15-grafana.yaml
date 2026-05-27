@@ -169,6 +169,137 @@ data:
           ],
           "title": "RPS per Pod (load distribution)",
           "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+          "id": 8,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(safety_reports_submitted_total[1m])) by (status, facility)",
+              "legendFormat": "{{status}} ({{facility}})"
+            }
+          ],
+          "title": "Safety Reports Submitted per Second",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+          "id": 9,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(safety_active_events_count) by (severity)",
+              "legendFormat": "{{severity}}"
+            }
+          ],
+          "title": "Active Emergency Events",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+          "id": 10,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(safety_cache_operations_total[1m])) by (op)",
+              "legendFormat": "{{op}}"
+            }
+          ],
+          "title": "Redis Cache Operations (Hit vs Miss)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+          "id": 11,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "pg_stat_database_numbackends{datname=\"safety_response\"}",
+              "legendFormat": "backends"
+            }
+          ],
+          "title": "PostgreSQL Active Connections",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+          "id": 12,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(pg_stat_database_xact_commit{datname=\"safety_response\"}[1m]))",
+              "legendFormat": "commit"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(rate(pg_stat_database_xact_rollback{datname=\"safety_response\"}[1m]))",
+              "legendFormat": "rollback"
+            }
+          ],
+          "title": "PostgreSQL Transaction Rate (Commit vs Rollback)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+          "id": 13,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "redis_memory_used_bytes",
+              "legendFormat": "used bytes"
+            }
+          ],
+          "title": "Redis Memory Usage (Bytes)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+          "id": 14,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "rate(redis_commands_processed_total[1m])",
+              "legendFormat": "commands/sec"
+            }
+          ],
+          "title": "Redis Operations Rate (Ops/sec)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+          "id": 15,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"safety-system\", horizontalpodautoscaler=\"backend-hpa\"}",
+              "legendFormat": "replicas"
+            }
+          ],
+          "title": "Backend HPA Replicas",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+          "id": 16,
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"safety-system\", container=\"backend\"}) by (pod)",
+              "legendFormat": "{{pod}}"
+            }
+          ],
+          "title": "Backend Pod Restarts Count",
+          "type": "timeseries"
         }
       ],
       "refresh": "5s",

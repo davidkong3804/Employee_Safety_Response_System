@@ -82,13 +82,22 @@ async def cache_get_json(key: str) -> Optional[Any]:
         raw = await _get_client().get(key)
     except Exception as exc:
         log.debug("cache_get_json(%s) failed: %s", key, exc)
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="miss").inc()
         return None
     if raw is None:
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="miss").inc()
         return None
     try:
-        return json.loads(raw)
+        val = json.loads(raw)
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="hit").inc()
+        return val
     except json.JSONDecodeError:
         # Corrupt cache entry — pretend it's a miss so the caller refetches.
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="miss").inc()
         return None
 
 

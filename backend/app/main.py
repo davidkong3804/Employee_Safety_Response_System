@@ -18,6 +18,7 @@ from app.modules.notifications.router import (
 )
 from app.modules.reports.router import router as reports_router
 from app.modules.users.router import router as users_router
+import app.metrics
 
 
 @asynccontextmanager

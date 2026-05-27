@@ -98,12 +98,23 @@ data:
             target_label: pod
           - source_labels: [__meta_kubernetes_namespace]
             target_label: namespace
-          # Backend pods don't set the `job` label — pretend they do, so
-          # the existing alert rules and Grafana panels keep working.
+          # Set the `job` label based on the app label so they are organized.
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: backend
             target_label: job
             replacement: safety-response-backend
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: postgres-exporter
+            target_label: job
+            replacement: postgres-exporter
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: redis-exporter
+            target_label: job
+            replacement: redis-exporter
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: kube-state-metrics
+            target_label: job
+            replacement: kube-state-metrics
 ---
 # Rules: mirror monitoring/prometheus-rules.yml. Kept in a separate
 # ConfigMap so editing alerts doesn't churn the prometheus.yml hash and
