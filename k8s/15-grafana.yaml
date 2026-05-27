@@ -24,6 +24,7 @@ data:
         access: proxy
         url: http://prometheus:9090
         isDefault: true
+        uid: prometheus
         editable: false
 ---
 apiVersion: v1
@@ -58,12 +59,12 @@ data:
     {
       "panels": [
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
           "id": 1,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\"}[1m]))",
               "legendFormat": "RPS"
             }
@@ -72,17 +73,17 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
           "id": 2,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=\"4xx\"}[1m]))",
               "legendFormat": "4xx"
             },
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=\"5xx\"}[1m]))",
               "legendFormat": "5xx"
             }
@@ -91,12 +92,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
           "id": 3,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
               "legendFormat": "p95"
             }
@@ -105,12 +106,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
           "id": 4,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\"}[1m])) by (handler)",
               "legendFormat": "{{handler}}"
             }
@@ -119,22 +120,22 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
           "id": 5,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
               "legendFormat": "p50"
             },
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "histogram_quantile(0.90, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
               "legendFormat": "p90"
             },
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"safety-response-backend\"}[1m])) by (le)) * 1000",
               "legendFormat": "p99"
             }
@@ -143,12 +144,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
           "id": 6,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "count(up{job=\"safety-response-backend\"} == 1)",
               "legendFormat": "healthy pods"
             }
@@ -157,12 +158,12 @@ data:
           "type": "stat"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
           "id": 7,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\"}[1m])) by (pod)",
               "legendFormat": "{{pod}}"
             }
@@ -171,12 +172,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
           "id": 8,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(safety_reports_submitted_total) by (status, facility)",
               "legendFormat": "{{status}} ({{facility}})"
             }
@@ -185,12 +186,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
           "id": 9,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(safety_active_events_count) by (severity)",
               "legendFormat": "{{severity}}"
             }
@@ -199,12 +200,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
           "id": 10,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(safety_cache_operations_total[1m])) by (op)",
               "legendFormat": "{{op}}"
             }
@@ -213,12 +214,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
           "id": 11,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "pg_stat_database_numbackends{datname=\"safety_response\"}",
               "legendFormat": "backends"
             }
@@ -227,17 +228,17 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
           "id": 12,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(pg_stat_database_xact_commit{datname=\"safety_response\"}[1m]))",
               "legendFormat": "commit"
             },
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(rate(pg_stat_database_xact_rollback{datname=\"safety_response\"}[1m]))",
               "legendFormat": "rollback"
             }
@@ -246,12 +247,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
           "id": 13,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "redis_memory_used_bytes",
               "legendFormat": "used bytes"
             }
@@ -260,12 +261,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
           "id": 14,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "rate(redis_commands_processed_total[1m])",
               "legendFormat": "commands/sec"
             }
@@ -274,12 +275,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
           "id": 15,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"safety-system\", horizontalpodautoscaler=\"backend-hpa\"}",
               "legendFormat": "replicas"
             }
@@ -288,12 +289,12 @@ data:
           "type": "timeseries"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
           "id": 16,
           "targets": [
             {
-              "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+              "datasource": { "type": "prometheus", "uid": "prometheus" },
               "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"safety-system\", container=\"backend\"}) by (pod)",
               "legendFormat": "{{pod}}"
             }
