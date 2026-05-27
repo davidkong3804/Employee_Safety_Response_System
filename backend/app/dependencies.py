@@ -45,7 +45,6 @@ async def _get_user_by_id(user_id: str, db: AsyncSession) -> User | None:
             "phone": user.phone,
             "manager_id": str(user.manager_id) if user.manager_id else None,
             "is_active": user.is_active,
-
         }
         await cache_set_json(cache_key, user_dict, ttl_seconds=USER_PROFILE_TTL)
     return user

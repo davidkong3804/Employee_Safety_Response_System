@@ -28,13 +28,13 @@ class TestSubmitReport:
         assert r.status_code == 200
         assert r.json()["message"] == "Trapped in room B3"
 
-    async def test_invalid_status_returns_400(self, client, employee_headers, active_event):
+    async def test_invalid_status_returns_422(self, client, employee_headers, active_event):
         r = await client.post(
             f"/api/events/{str(active_event.id)}/report",
             json={"status": "unknown_status"},
             headers=employee_headers,
         )
-        assert r.status_code == 400
+        assert r.status_code == 422
 
     async def test_no_placeholder_returns_404(self, client, admin_headers, employee_headers, employee_user, db_session):
         from uuid import UUID as PyUUID

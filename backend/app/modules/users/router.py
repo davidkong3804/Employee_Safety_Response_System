@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import cache_delete, cache_invalidate_pattern
+from app.cache import cache_delete
 from app.database import get_db
 from app.dependencies import require_role
 from app.modules.auth.router import hash_password

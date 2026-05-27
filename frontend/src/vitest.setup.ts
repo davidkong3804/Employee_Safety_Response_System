@@ -111,6 +111,7 @@ if (!i18n.isInitialized) {
           'facility.kumamoto': 'Kumamoto',
           'facility.germany': 'Germany',
           'facility.dresden': 'Saxony / Dresden',
+          'facility.fabsCount': '({{count}} fabs)',
         },
       },
     },
