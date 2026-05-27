@@ -79,12 +79,12 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=~\"4..\"}[1m]))",
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=~\"4..\"}[1m])) or vector(0)",
               "legendFormat": "4xx"
             },
             {
               "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=~\"5..\"}[1m]))",
+              "expr": "sum(rate(http_requests_total{job=\"safety-response-backend\", status=~\"5..\"}[1m])) or vector(0)",
               "legendFormat": "5xx"
             }
           ],
