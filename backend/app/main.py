@@ -23,9 +23,11 @@ from app.modules.users.router import router as users_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Schema creation and demo seeding are NOT done here — running them on
-    # every pod startup races across replicas. They run once via the
-    # init job / `python -m app.init_db` (see docs/deployment.md).
+    # Pre-populate ACTIVE_EVENTS gauge for all severities so they don't show "No Data"
+    from app.metrics import ACTIVE_EVENTS
+    for severity in ("low", "medium", "high", "critical"):
+        ACTIVE_EVENTS.labels(severity=severity).set(0)
+
     await start_drainer()
     yield
     await stop_drainer()
