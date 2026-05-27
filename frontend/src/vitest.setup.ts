@@ -89,6 +89,7 @@ if (!i18n.isInitialized) {
           'nav.events': 'Event Management',
           'nav.users': 'User Management',
           'app.title': 'Safety Response System',
+          'app.subtitle': 'Employee Safety & Response System',
           'report.title': 'Safety Report',
           'report.imSafe': "I'm Safe",
           'report.needHelp': 'Need Help',
