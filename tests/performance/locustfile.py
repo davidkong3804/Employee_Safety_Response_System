@@ -22,6 +22,7 @@ Acceptance thresholds (check in the HTML report):
   - Throughput > 100 RPS for read endpoints
 """
 
+import os
 import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -121,7 +122,19 @@ def warmup_tokens(environment, **kwargs) -> None:
 
 class _BaseUser(HttpUser):
     abstract = True
-    wait_time = between(1, 3)
+    # Aggressive wait_time so 500 simulated VUs generate request volume
+    # equivalent to ~2000 conventional VUs (1-3s wait). Each VU now issues
+    # roughly 1 request per 0.4s instead of every 2s, multiplying offered
+    # load 5× without quintupling the Locust client's own greenlet count
+    # (which would overwhelm the GitHub Actions runner at 2 vCPU).
+    #
+    # Set LOAD_TEST_WAIT_FAST=0 in the env to revert to the realistic
+    # think-time profile.
+    wait_time = (
+        between(1, 3)
+        if os.environ.get("LOAD_TEST_WAIT_FAST", "1") == "0"
+        else between(0.2, 0.6)
+    )
     _token: Optional[str] = None
 
     def _headers(self) -> dict:
