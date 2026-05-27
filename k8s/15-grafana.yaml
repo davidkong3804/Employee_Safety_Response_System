@@ -177,11 +177,11 @@ data:
           "targets": [
             {
               "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-              "expr": "sum(rate(safety_reports_submitted_total[1m])) by (status, facility)",
+              "expr": "sum(safety_reports_submitted_total) by (status, facility)",
               "legendFormat": "{{status}} ({{facility}})"
             }
           ],
-          "title": "Safety Reports Submitted per Second",
+          "title": "Safety Reports Submitted (Cumulative)",
           "type": "timeseries"
         },
         {
