@@ -160,29 +160,28 @@ CREATE INDEX idx_reports_event_user_status ON safety_reports (event_id, user_id,
 
 ## 6. 全面架構調整與未來深海優化建議
 
-為了讓本系統在台積電專家評審面前展現出「具備生產級實力」的頂尖軟體架構，我們提出以下全面的**架構調整與高可用（HA）優化建議方案**。這些建議可直接寫入簡報的「未來展望與架構演進」章節，能大幅獲得評審青睞：
+本系統在**資料庫與快取層已完成了高規格的雲原生託管設計**，直接將底層基礎設施託管於 Google Cloud 平台，保障了生產級的高可用性與資料耐久度。為了在台積電專家評審面前展現出更進一步的「企業級頂尖演進」，我們針對現有的 GCP 託管架構，提出以下**深海優化建議方案**（可直接作為簡報中的「未來展望與技術演進」章節）：
 
-### 6.1 資料庫架構：從單點 StatefulSet 演進至託管高可用 (High Availability)
-*   **當前痛點**：目前的 PostgreSQL 使用 K8s `StatefulSet` 部署為單一實例，雖然掛載了 Persistent Volume，但在 Pod 重啟或節點故障時會產生短暫服務中斷，且不具備地理多活能力。
-*   **優化方案**：在 GKE 生產環境中，應徹底移除 K8s 內的自建 PostgreSQL，遷移至託管的 **Google Cloud SQL for PostgreSQL**：
-    *   **啟用高可用性 (HA)**：配置區域型（Regional）部署，自動在不同可用區（Zone）建立同步複製品，並提供自動故障轉移（Failover），保證 RTO < 60 秒。
-    *   **讀寫分離**：建立 Cloud SQL 唯讀副本（Read Replicas），將主管與管理員的「高流量報表統計（`GET /api/events/{id}/stats`）」流量導向唯讀副本；而員工的「安全回報寫入（`POST /api/events/{id}/report`）」導向主資料庫，徹底釋放主庫壓力。
-    *   **連線代理**：生產環境保留 `pgbouncer` 容器作為連線集線器，將數千個 FastAPI 客戶端連線多路複用（Multiplex）成少數 DB 連線。
+### 6.1 資料庫架構：現有 Google Cloud SQL 託管架構與唯讀副本（Read Replicas）演進
+*   **現有卓越架構（已實作）**：系統已成功淘汰 K8s 自建單點資料庫，轉而採用託管的 **Google Cloud SQL for PostgreSQL**，並配置了 `cloudsql-proxy` 側車（Sidecar）以 Google 憑證與 Workload Identity 進行加密連線。同時導入了 `pgbouncer` 連線集線器，將數千個客戶端併發連線完美多路複用成極少數實體 DB 連線，展現了極高的架構成熟度。
+*   **未來深海優化方案**：
+    *   **資料庫讀寫分離 (Read Replicas)**：隨著壓測規模再次擴大，主管進行「多維度報表查詢（`GET /api/events/{id}/stats`）」會佔用大量 CPU。未來可一鍵在 GCP 建立 Cloud SQL **唯讀副本（Read Replicas）**。將寫入流量（回報提交）導向主庫，讀取流量（主管報表）導向唯讀庫，徹底分流高併發負載。
+    *   **驗證時間點還原 (PITR, Point-in-Time Recovery)**：開啟 Cloud SQL 的自動備份與 Write-Ahead Log (WAL) 封存，確保在人為誤刪資料或遭受攻擊時，能精確還原至任意「秒」的歷史狀態。
 
-### 6.2 快取與速率限制架構：採用 Cloud Memorystore for Redis HA
-*   **當前痛點**：Redis 實例為單點，若 Redis 宕機，雖然我們實作了「優雅降級邏輯（自動放行速率限制、繞過 Buffer 直接寫入 DB）」，但會讓高頻流量直接打在 PostgreSQL 上，造成資料庫二次崩潰。
-*   **優化方案**：遷移至託管的 **Google Cloud Memorystore for Redis**：
-    *   **啟用 Redis Sentinel 或 Cluster 模式**：配置主從複製與自動容錯切換，提供 99.9% 的 SLA。
-    *   **記憶體自動淘汰策略**：針對快取 Key 與滑動窗口 ZSET 設置合理的 `volatile-lru` 淘汰機制，防止壓測極端流量下 Redis 記憶體溢出。
+### 6.2 快取架構：現有 Google Cloud Memorystore 託管快取與叢集擴展
+*   **現有卓越架構（已實作）**：快取與高頻滑動窗口速率限制已成功接入託管的 **Google Cloud Memorystore for Redis**（VPC Peering 內網 IP 獨立連線），在高負載時提供極致的 O(1) 讀寫效能，並具備優雅降級容錯設計。
+*   **未來深海優化方案**：
+    *   **啟用 Redis Cluster 橫向分片**：當壓測規模拉升至數十萬人時，單一 Redis 實例可能會遇到網路吞吐量瓶頸。可將 Memorystore 升級為 **Redis Cluster 模式**，透過雜湊槽將流量均勻分片至多台實例。
+    *   **配置記憶體溢出淘汰策略**：將 Memorystore 的 `maxmemory-policy` 設置為 `volatile-lru`，在快取記憶體觸頂時自動淘汰最舊的非必要快取，保障滑動窗口速率限制等核心業務 Key 絕對可用。
 
 ### 6.3 安全與金鑰管理：整合 GCP Secret Manager 與 CSI Driver
 *   **當前痛點**：目前的資料庫密碼與 JWT 金鑰以 Plain K8s Secret 存儲於叢集中（Base64 編碼），在企業級安全性審查中，Base64 儲存並不等同於加密。
-*   **優化方案**：導入 **Google Secret Manager** 與 **Kubernetes Secrets Store CSI Driver**：
+*   **優化方案**：導入 **Google Secret Manager** 與 **辦公室加密金鑰 (KMS)**：
     *   金鑰與資料庫密碼統一由雲端金鑰託管系統（GCP Secret Manager）進行 KMS 金鑰加密儲存。
-    *   透過 CSI 驅動程式，將 secrets 動態掛載為 Pod 內部的暫存記憶體磁碟卷（tmpfs），密碼不落地，防止密碼被 `kubectl get secret -o yaml` 輕易解碼。
+    *   透過 Secrets Store CSI 驅動程式，將 secrets 動態掛載為 Pod 內部的暫存記憶體磁碟卷（tmpfs），密碼不落地，防止密碼被 `kubectl get secret -o yaml` 輕易解碼。
 
 ### 6.4 運維架構：遷移至 Google Managed Service for Prometheus (GMP)
-*   **當前痛點**：目前的 Prometheus 與 Grafana 採用叢集內自建部署，雖然免費且完全自給自足，但在大型壓測時，Prometheus TSDB 寫入本身會消耗大量的 Pod 記憶體與磁碟 I/O，可能與業務後端搶佔節點資源。
+*   **當前痛點**：目前的 Prometheus 與 Grafana 採用叢集內自建部署，雖然完全自給自足，但在大型壓測時，Prometheus TSDB 寫入本身會消耗大量的 Pod 記憶體與磁碟 I/O，可能與業務後端搶佔節點資源。
 *   **優化方案**：採用 **Google Cloud Managed Service for Prometheus (GMP)**：
     *   **無伺服器監控 (Serverless Scrape)**：由 Google 託管的 Monarch 代為處理億級指標的儲存與水平擴展，開發人員只需部署極輕量的 collector，無需維護 Prometheus 儲存硬碟。
     *   **統一觀測**：結合 Google Cloud Observability 儀表板，將 GKE、Cloud SQL 與 Redis 監控統一整合成 PromQL 查詢面板，提供企業級 Single Pane of Glass 觀測體驗。
