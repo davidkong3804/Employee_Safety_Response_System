@@ -389,6 +389,10 @@ spec:
               value: "true"
             - name: GF_AUTH_ANONYMOUS_ORG_ROLE
               value: Viewer
+            - name: GF_SERVER_ROOT_URL
+              value: "https://employee-safety.duckdns.org/grafana/"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
           readinessProbe:
             httpGet: { path: /api/health, port: 3000 }
             initialDelaySeconds: 10
