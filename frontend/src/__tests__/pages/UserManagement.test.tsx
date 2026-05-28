@@ -40,7 +40,6 @@ function makeUser(overrides: Partial<UserFull> = {}): UserFull {
     phone: '0912345678',
     manager_id: null,
     is_active: true,
-    created_at: '2026-05-26T10:00:00Z',
     ...overrides,
   }
 }
