@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.cache import buffer_report, cache_get_json, cache_invalidate_pattern, cache_set_json, get_buffered_report
+from app.config import settings
 from app.database import get_db, get_read_db
 from app.dependencies import get_current_user, require_role
 from app.modules.reports.models import SafetyReport
@@ -24,7 +25,11 @@ from app.rate_limiter import RedisRateLimiter
 
 log = logging.getLogger(__name__)
 
-report_limiter = RedisRateLimiter(limit=5, window=10, action="report")
+report_limiter = RedisRateLimiter(
+    limit=settings.RATE_LIMIT_REPORT_LIMIT,
+    window=settings.RATE_LIMIT_REPORT_WINDOW,
+    action="report",
+)
 
 
 StatusFilter = Literal["safe", "need_help", "unreported"]
