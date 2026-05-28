@@ -3,30 +3,26 @@
 # Bootstrap a fresh GCE VM (Debian/Ubuntu) into a Locust load-test driver.
 # Idempotent — safe to re-run.
 #
+# The VM does NOT need access to the private GitHub repo. The caller scp's
+# locustfile.py + run_gke_shape_test.sh onto the VM after this script runs.
+#
 # Usage on the VM:
 #   sudo bash setup_loadtest_vm.sh
-#   ./tests/performance/run_gke_shape_test.sh
 #
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/davidkong3804/Employee_Safety_Response_System.git}"
-REPO_DIR="${REPO_DIR:-/opt/loadtest}"
 LOCUST_VERSION="${LOCUST_VERSION:-2.34.0}"
+WORK_DIR="${WORK_DIR:-/opt/loadtest}"
 
 echo "=== apt update / install deps ==="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y --no-install-recommends \
-  python3 python3-pip python3-venv git ca-certificates curl
+  python3 python3-pip python3-venv ca-certificates curl
 
-echo "=== clone or update repo at $REPO_DIR ==="
-if [ -d "$REPO_DIR/.git" ]; then
-  git -C "$REPO_DIR" fetch --depth=1 origin main
-  git -C "$REPO_DIR" reset --hard origin/main
-else
-  rm -rf "$REPO_DIR"
-  git clone --depth=1 "$REPO_URL" "$REPO_DIR"
-fi
+echo "=== prepare $WORK_DIR ==="
+mkdir -p "$WORK_DIR/tests/performance" "$WORK_DIR/reports"
+chown -R $(logname 2>/dev/null || echo $SUDO_USER):$(logname 2>/dev/null || echo $SUDO_USER) "$WORK_DIR" 2>/dev/null || true
 
 echo "=== install Locust $LOCUST_VERSION in /opt/locust-venv ==="
 python3 -m venv /opt/locust-venv
@@ -50,13 +46,13 @@ cat > /etc/systemd/system.conf.d/loadtest.conf <<'EOF'
 DefaultLimitNOFILE=65536
 EOF
 
-chmod +x "$REPO_DIR/tests/performance/run_gke_shape_test.sh" || true
-
 echo
 echo "=== Setup complete ==="
-echo "Repo  : $REPO_DIR"
-echo "Locust: $(locust --version 2>&1 | head -1)"
+echo "Work dir: $WORK_DIR"
+echo "Locust  : $(locust --version 2>&1 | head -1)"
 echo
-echo "Next:"
-echo "  cd $REPO_DIR"
-echo "  ./tests/performance/run_gke_shape_test.sh"
+echo "Next (run from your laptop):"
+echo "  gcloud compute scp tests/performance/locustfile.py tests/performance/run_gke_shape_test.sh \\"
+echo "    loadtest-driver:$WORK_DIR/tests/performance/ --zone=asia-east1-a"
+echo "  gcloud compute ssh loadtest-driver --zone=asia-east1-a \\"
+echo "    --command 'cd $WORK_DIR && chmod +x tests/performance/*.sh && ./tests/performance/run_gke_shape_test.sh'"
