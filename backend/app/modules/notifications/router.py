@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.modules.events.models import Event
@@ -23,7 +24,11 @@ from app.rate_limiter import RedisRateLimiter
 router = APIRouter(prefix="/api/events", tags=["notifications"])
 me_router = APIRouter(prefix="/api/me", tags=["notifications"])
 
-remind_limiter = RedisRateLimiter(limit=3, window=60, action="remind")
+remind_limiter = RedisRateLimiter(
+    limit=settings.RATE_LIMIT_REMIND_LIMIT,
+    window=settings.RATE_LIMIT_REMIND_WINDOW,
+    action="remind",
+)
 
 
 @router.post("/{event_id}/remind", response_model=ReminderTriggerResponse)
