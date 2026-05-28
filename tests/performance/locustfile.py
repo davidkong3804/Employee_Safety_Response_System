@@ -27,8 +27,9 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
+import math
 import requests
-from locust import HttpUser, between, events, task
+from locust import HttpUser, LoadTestShape, between, events, task
 
 # Pre-warm pool size sentinels — see warmup_tokens() for the rationale.
 WARMUP_MAX_TOKENS = 2000        # absolute upper bound (~ Locust GitHub Action runner mem budget)
@@ -283,3 +284,92 @@ class AdminUser(_BaseUser):
     @task(1)
     def list_users(self) -> None:
         self.client.get("/api/users", headers=self._headers(), name="GET /api/users")
+
+
+
+# ---------------------------------------------------------------------------
+# LoadTestShape — smooth linear (or exponential) ramp instead of Locust's
+# default uniform spawn-rate. Activated only when LOAD_TEST_SHAPE is set in
+# the env; otherwise Locust falls back to the --users / --spawn-rate flags
+# from the command line (existing behavior is preserved).
+#
+# Two profiles, both ramp to LOAD_TEST_PEAK_USERS over LOAD_TEST_RAMP_SEC
+# and hold for LOAD_TEST_HOLD_SEC:
+#
+#   LOAD_TEST_SHAPE=linear   → user_count grows linearly each tick.
+#                              Produces a clean upward straight line on
+#                              the "Number of Users" chart, and a
+#                              monotonically rising RPS curve while ramp
+#                              is in progress.
+#
+#   LOAD_TEST_SHAPE=exp      → exponential ramp from 10 VU to peak. Each
+#                              second VU count = 10 * (peak/10) ^ (t/ramp).
+#                              Looks like a hockey-stick curve.
+#
+# Environment defaults (chosen for a 2000-user-equivalent run):
+#   LOAD_TEST_PEAK_USERS = 500     (paired with the 0.2-0.6 s wait_time
+#                                   so server-side load equals ~2000 VU
+#                                   with realistic 1-3 s think-time)
+#   LOAD_TEST_RAMP_SEC   = 120     (2 minutes ramp)
+#   LOAD_TEST_HOLD_SEC   = 180     (3 minutes hold at peak)
+#
+# How to use in the workflow:
+#   - Don't pass --users / --spawn-rate; let the shape control them.
+#   - Set LOAD_TEST_SHAPE=linear (or exp) in the workflow env.
+# ---------------------------------------------------------------------------
+
+
+class _RampShape(LoadTestShape):
+    """Linear or exponential ramp + plateau. Returns None when finished so
+    Locust shuts down cleanly."""
+
+    use_common_options = True
+
+    @property
+    def _enabled(self) -> bool:
+        return os.environ.get("LOAD_TEST_SHAPE", "").lower() in ("linear", "exp")
+
+    @property
+    def _profile(self) -> str:
+        return os.environ.get("LOAD_TEST_SHAPE", "linear").lower()
+
+    @property
+    def _peak(self) -> int:
+        return int(os.environ.get("LOAD_TEST_PEAK_USERS", "500"))
+
+    @property
+    def _ramp(self) -> int:
+        return int(os.environ.get("LOAD_TEST_RAMP_SEC", "120"))
+
+    @property
+    def _hold(self) -> int:
+        return int(os.environ.get("LOAD_TEST_HOLD_SEC", "180"))
+
+    def tick(self):
+        if not self._enabled:
+            return None  # fall back to --users / --spawn-rate semantics
+        elapsed = self.get_run_time()
+        peak = self._peak
+        ramp = self._ramp
+        hold = self._hold
+        total = ramp + hold
+
+        if elapsed >= total:
+            return None  # done — Locust will tear down
+
+        if elapsed < ramp:
+            frac = elapsed / ramp if ramp > 0 else 1.0
+            if self._profile == "exp":
+                # Exponential from 10 → peak over ramp seconds.
+                start = 10
+                target = max(start, int(start * math.pow(peak / start, frac)))
+            else:
+                # Linear from 1 → peak.
+                target = max(1, int(peak * frac))
+        else:
+            target = peak
+
+        # spawn_rate is "users per second to add" — pick something large enough
+        # that we can hit `target` even if the runner is a bit behind.
+        spawn = max(5, peak // 20)
+        return (target, spawn)

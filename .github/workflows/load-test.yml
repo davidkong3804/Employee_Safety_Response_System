@@ -4,14 +4,31 @@ on:
   workflow_dispatch:
     inputs:
       users:
-        description: 'Concurrent users'
+        description: 'Concurrent users (ignored when shape != default)'
         default: '50'
       duration:
-        description: 'Duration (e.g. 2m, 5m, 10m)'
+        description: 'Duration (e.g. 2m, 5m, 10m). Ignored when shape != default'
         default: '2m'
       spawn_rate:
-        description: 'Users spawned per second'
+        description: 'Users spawned per second (ignored when shape != default)'
         default: '5'
+      shape:
+        description: 'Load profile: default | linear | exp'
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - linear
+          - exp
+      peak_users:
+        description: 'Peak users for linear/exp ramp (Locust simulates this; with 0.2-0.6s wait_time, 500 ≈ 2000 traditional VUs)'
+        default: '500'
+      ramp_sec:
+        description: 'Ramp duration in seconds (linear/exp)'
+        default: '120'
+      hold_sec:
+        description: 'Hold duration in seconds at peak (linear/exp)'
+        default: '180'
 
 jobs:
   load-test:
@@ -58,17 +75,40 @@ jobs:
         # "Evaluate result" step below, treating expected 429 (rate limiter)
         # as a pass condition.
         continue-on-error: true
+        env:
+          # LoadTestShape picks these up at startup. When SHAPE=default the
+          # shape class is a no-op and Locust uses --users / --spawn-rate.
+          LOAD_TEST_SHAPE: ${{ inputs.shape }}
+          LOAD_TEST_PEAK_USERS: ${{ inputs.peak_users }}
+          LOAD_TEST_RAMP_SEC: ${{ inputs.ramp_sec }}
+          LOAD_TEST_HOLD_SEC: ${{ inputs.hold_sec }}
         run: |
           mkdir -p reports
-          locust -f tests/performance/locustfile.py \
-            --headless \
-            --host "$HOST" \
-            --users ${{ inputs.users }} \
-            --spawn-rate ${{ inputs.spawn_rate }} \
-            --run-time ${{ inputs.duration }} \
-            --html reports/loadtest.html \
-            --csv reports/loadtest \
-            --only-summary
+
+          if [ "${{ inputs.shape }}" = "default" ]; then
+            # Original behavior: caller-controlled VU count + ramp.
+            locust -f tests/performance/locustfile.py \
+              --headless \
+              --host "$HOST" \
+              --users ${{ inputs.users }} \
+              --spawn-rate ${{ inputs.spawn_rate }} \
+              --run-time ${{ inputs.duration }} \
+              --html reports/loadtest.html \
+              --csv reports/loadtest \
+              --only-summary
+          else
+            # Shape-driven: LoadTestShape owns user count + spawn rate.
+            # Total wall-clock = ramp + hold; add 30s safety margin.
+            RUN_TIME=$(( ${{ inputs.ramp_sec }} + ${{ inputs.hold_sec }} + 30 ))
+            echo "Using LoadTestShape='${{ inputs.shape }}', total ${RUN_TIME}s"
+            locust -f tests/performance/locustfile.py \
+              --headless \
+              --host "$HOST" \
+              --run-time ${RUN_TIME}s \
+              --html reports/loadtest.html \
+              --csv reports/loadtest \
+              --only-summary
+          fi
 
       - name: Upload HTML report
         if: always()
