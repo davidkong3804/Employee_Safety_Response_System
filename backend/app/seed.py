@@ -6,11 +6,11 @@ import bcrypt
 from sqlalchemy import insert as sa_insert
 from sqlalchemy import select
 
+from app.config import settings
 from app.database import async_session
 from app.modules.events.models import Event
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
-from app.config import settings
 
 DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt(settings.BCRYPT_ROUNDS)).decode("utf-8")
 
