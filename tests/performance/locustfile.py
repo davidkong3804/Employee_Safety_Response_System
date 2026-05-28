@@ -39,7 +39,7 @@ WARMUP_OVERFETCH_FACTOR = 2     # warm 2× VU count so random.choice has slack
 # Seed credentials (password123 for all)
 #
 # Capacity must match backend/app/seed.py LOAD_TEST_MAX_EMPLOYEES — currently
-# 500. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
+# 15000. The first 30 are hand-crafted demo accounts (3-digit IDs); the rest
 # are auto-generated test accounts with 4-digit IDs.
 # ---------------------------------------------------------------------------
 LOAD_TEST_MAX_EMPLOYEES = 15000

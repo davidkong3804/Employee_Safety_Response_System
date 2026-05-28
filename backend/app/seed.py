@@ -13,11 +13,11 @@ from app.modules.users.models import User
 
 DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-# Capacity planning: load tests run up to 500 concurrent virtual users.
-# The first 30 employees (E001–E030) are hand-crafted demo data; the rest
-# are auto-generated test accounts (E0031–E0500). Bump this number if
-# stress tests need more capacity — both seed.py and locustfile.py should
-# stay in sync.
+# Capacity planning: load tests run up to LOAD_TEST_MAX_EMPLOYEES concurrent
+# virtual users. The first 30 employees (E001–E030) are hand-crafted demo
+# data; the rest are auto-generated test accounts (E0031–E{N}). Bump this
+# number if stress tests need more capacity — both seed.py and locustfile.py
+# should stay in sync.
 LOAD_TEST_MAX_EMPLOYEES = 15000
 
 
