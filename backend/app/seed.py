@@ -10,8 +10,9 @@ from app.database import async_session
 from app.modules.events.models import Event
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
+from app.config import settings
 
-DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt(settings.BCRYPT_ROUNDS)).decode("utf-8")
 
 # Capacity planning: load tests run up to 500 concurrent virtual users.
 # The first 30 employees (E001–E030) are hand-crafted demo data; the rest

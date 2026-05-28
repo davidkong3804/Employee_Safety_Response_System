@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 480
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    BCRYPT_ROUNDS: int = 12
 
     # Database connection pool — tuned per-pod so that
     # replicas x (DB_POOL_SIZE + DB_MAX_OVERFLOW) stays under Postgres max_connections.

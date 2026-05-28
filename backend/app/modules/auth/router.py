@@ -34,7 +34,7 @@ async def verify_password(plain_password: str, hashed_password: str) -> bool:
 def hash_password(password: str) -> str:
     """Synchronous on purpose — only called during user creation / seeding,
     not on the login hot path, so event-loop blocking is acceptable."""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(settings.BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def create_access_token(user_id: str) -> str:
