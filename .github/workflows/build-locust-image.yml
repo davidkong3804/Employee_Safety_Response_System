@@ -1,0 +1,57 @@
+name: Build Locust Image
+
+# Re-bake tests/performance/Dockerfile.locust (locustio/locust + the project's
+# locustfile) whenever the load-test scenario changes, and push to
+# Artifact Registry so the in-cluster Locust deployment can pull it.
+#
+# Triggers
+# --------
+# * push to main with changes under tests/performance/  (auto)
+# * workflow_dispatch                                    (manual)
+#
+# The image tag is the git SHA so a rolling restart picks up the new
+# scenario; an additional :latest tag lets the manifest stay version-
+# free for casual operators.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tests/performance/locustfile.py
+      - tests/performance/Dockerfile.locust
+      - .github/workflows/build-locust-image.yml
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push locust image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./tests/performance
+          file: ./tests/performance/Dockerfile.locust
+          push: true
+          # Locust image is small and cheaply rebuilt — keep GHA cache
+          # warm anyway so locustfile-only changes complete in seconds.
+          cache-from: type=gha,scope=locust
+          cache-to: type=gha,mode=max,scope=locust
+          tags: |
+            ${{ env.REGISTRY }}/locust:${{ github.sha }}
+            ${{ env.REGISTRY }}/locust:latest

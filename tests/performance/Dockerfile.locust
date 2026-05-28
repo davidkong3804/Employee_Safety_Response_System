@@ -1,0 +1,22 @@
+# Locust runner image with the locustfile baked in.
+#
+# Why a custom image instead of `locustio/locust:2.34.0` + ConfigMap?
+#   The locustfile is ~300 lines (Python, multi-class) and embeds the
+#   warmup logic that depends on a list of 15000 employee credentials.
+#   Inlining that into a ConfigMap (~50 KB) is fragile and surprises any
+#   future contributor who edits the .py file expecting it to ship.
+#   Baking it into an image means: change locustfile.py → CI rebuilds →
+#   `kubectl rollout restart deployment/locust-master deployment/locust-worker`
+#   ships the new scenario.
+#
+# Build:   docker build -f tests/performance/Dockerfile.locust -t locust:dev tests/performance
+# Push:    handled by .github/workflows/build-locust-image.yml on every push to main
+# Run:     k8s/20-locust.yaml wires it up; image tag = git SHA
+#
+# Image base: locustio/locust:2.34.0 (matches what GitHub Actions installs)
+
+FROM locustio/locust:2.34.0
+
+# /mnt/locust is locust's default working directory; -f /mnt/locust/locustfile.py
+# is the default argument when no -f is passed.
+COPY locustfile.py /mnt/locust/locustfile.py

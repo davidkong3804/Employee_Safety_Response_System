@@ -1,0 +1,208 @@
+# In-cluster Locust deployment for 10k-RPS load testing.
+#
+# Why in-cluster?
+# ---------------
+# External Locust clients (GitHub Actions runner, Cloud Shell, the
+# user's laptop) saturate at 100-1500 RPS:
+#   * GitHub Actions runner: 2 vCPU + cross-region 150 ms RTT  → ~100 RPS
+#   * Cloud Shell:           1 vCPU                            → ~130 RPS
+#   * MacBook → GFE Ingress: per-client TLS connection limit   → ~300 RPS
+#
+# Locust workers running inside the cluster:
+#   * connect to backend over ClusterIP (< 1 ms RTT)
+#   * skip the GFE Ingress entirely → no per-client connection cap
+#   * scale horizontally: each pod ≈ 1000 RPS at 1 vCPU
+#
+# 10 worker pods × 1000 RPS = 10000 RPS ceiling. Each worker also gets
+# its own pod IP, so even if backend pods sat behind a stricter Ingress
+# they would not see a single-source bottleneck.
+#
+# How to run a test
+# -----------------
+# 1. Apply this file once (kubectl apply -f k8s/20-locust.yaml).
+# 2. Workers connect to master automatically.
+# 3. Trigger a run two ways:
+#    a) Web UI: kubectl -n safety-system port-forward svc/locust-master 8089:8089
+#       then open http://localhost:8089.
+#    b) Headless: see .github/workflows/in-cluster-loadtest.yml.
+#
+# Image tag is updated by build-locust-image.yml on every push to main.
+
+# --------------------------------------------------------------------------
+# ConfigMap: shared parameters (target host, rate-limit overrides, etc.)
+# --------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locust-config
+  namespace: safety-system
+data:
+  # Cluster-internal target — bypasses the GKE Ingress / GFE entirely.
+  # Port 8000 = backend container port (see k8s/06-backend.yaml).
+  TARGET_HOST: "http://backend.safety-system.svc.cluster.local:8000"
+
+---
+# --------------------------------------------------------------------------
+# Service: master exposes the Web UI (8089) and the worker bind port (5557)
+# --------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust-master
+  namespace: safety-system
+spec:
+  type: ClusterIP
+  selector:
+    app: locust
+    role: master
+  ports:
+    - name: web-ui
+      port: 8089
+      targetPort: 8089
+    - name: worker-bind
+      port: 5557
+      targetPort: 5557
+
+---
+# --------------------------------------------------------------------------
+# Locust master (1 pod)
+# --------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust-master
+  namespace: safety-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: locust
+      role: master
+  template:
+    metadata:
+      labels:
+        app: locust
+        role: master
+    spec:
+      containers:
+        - name: locust
+          # Image tag is bumped by the build workflow. ':latest' is fine
+          # here because the master is a single pod with no rolling concern.
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/locust:latest
+          imagePullPolicy: Always
+          # Web-UI mode by default. To run headless via the workflow we
+          # `kubectl set args` to inject --headless --users N --run-time T
+          # at trigger time, then revert.
+          args:
+            - --master
+            - -f
+            - /mnt/locust/locustfile.py
+            - --host
+            - $(TARGET_HOST)
+          envFrom:
+            - configMapRef:
+                name: locust-config
+          ports:
+            - name: web-ui
+              containerPort: 8089
+            - name: worker-bind
+              containerPort: 5557
+          # Master is mostly I/O coordinating workers; not CPU-heavy.
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+---
+# --------------------------------------------------------------------------
+# Locust workers (10 pods, scale via 'kubectl scale deployment locust-worker')
+# --------------------------------------------------------------------------
+# Each worker = 1 vCPU + 0.5 GiB → ~1000 RPS comfortably.
+# 10 workers × 1000 RPS = 10000 RPS ceiling.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust-worker
+  namespace: safety-system
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: locust
+      role: worker
+  # Workers must not block backend pods from scheduling — give them
+  # a softer anti-affinity hint rather than dedicating nodes.
+  template:
+    metadata:
+      labels:
+        app: locust
+        role: worker
+    spec:
+      containers:
+        - name: locust
+          image: asia-east1-docker.pkg.dev/avid-vine-496920-n4/safety-response/locust:latest
+          imagePullPolicy: Always
+          args:
+            - --worker
+            - --master-host
+            - locust-master.safety-system.svc.cluster.local
+            - -f
+            - /mnt/locust/locustfile.py
+          envFrom:
+            - configMapRef:
+                name: locust-config
+          resources:
+            requests:
+              cpu: 500m
+              memory: 384Mi
+            limits:
+              cpu: 1500m
+              memory: 1Gi
+
+---
+# --------------------------------------------------------------------------
+# NetworkPolicy: open egress so workers can reach backend + DNS.
+# (default-deny-all from k8s/11-network-policy.yaml blocks both otherwise.)
+# --------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: locust
+  namespace: safety-system
+spec:
+  podSelector:
+    matchLabels:
+      app: locust
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Master accepts worker connections (5557) and the Web UI (8089).
+    # Workers accept nothing.
+    - ports:
+        - port: 5557
+        - port: 8089
+  egress:
+    # Talk to backend on the ClusterIP.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - port: 8000
+    # Master ↔ worker traffic (both directions, same pod label).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: locust
+      ports:
+        - port: 5557
+    # DNS — required to resolve `backend.safety-system.svc.cluster.local`.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
