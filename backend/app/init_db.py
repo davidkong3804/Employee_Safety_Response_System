@@ -11,6 +11,7 @@ job, a Docker Compose init service, or locally:
 Seeding is idempotent: it is skipped if any user already exists. Setting the
 SEED_DEMO_DATA env var to a truthy value is equivalent to passing --seed.
 """
+
 import asyncio
 import os
 import sys
@@ -54,12 +55,14 @@ async def apply_pending_migrations() -> None:
     # column adds that the app depends on at runtime.
     async with engine.begin() as conn:
         # 1. Add the snapshot columns if missing
-        await conn.execute(text("""
+        await conn.execute(
+            text("""
             ALTER TABLE safety_reports
                 ADD COLUMN IF NOT EXISTS manager_id_snapshot UUID,
                 ADD COLUMN IF NOT EXISTS department_snapshot VARCHAR(100),
                 ADD COLUMN IF NOT EXISTS facility_snapshot VARCHAR(50)
-        """))
+        """)
+        )
 
         # 2. Ensure events.facility is VARCHAR(50)[] (ARRAY), not scalar VARCHAR.
         #    Clusters created before the ARRAY change store facility as a plain
@@ -67,7 +70,8 @@ async def apply_pending_migrations() -> None:
         #    Casting via `::character varying(50)[]` re-parses the literal into
         #    a proper multi-element array; ARRAY[facility] would instead wrap it
         #    in a single-element array, corrupting the data.
-        await conn.execute(text("""
+        await conn.execute(
+            text("""
             DO $$
             BEGIN
                 IF EXISTS (
@@ -83,21 +87,25 @@ async def apply_pending_migrations() -> None:
                               END;
                 END IF;
             END $$
-        """))
+        """)
+        )
 
         # 2b. Repair rows that were already migrated with the incorrect ARRAY[facility]
         #     wrapping (produces a 1-element array whose only element is an array-literal
         #     string like '{Fab14,Fab18}'). Re-parse those by casting the inner string.
-        await conn.execute(text("""
+        await conn.execute(
+            text("""
             UPDATE events
             SET    facility = (facility[1])::character varying(50)[]
             WHERE  facility IS NOT NULL
               AND  array_length(facility, 1) = 1
               AND  facility[1] LIKE '{%}'
-        """))
+        """)
+        )
 
         # 3. Backfill historical rows from current user values.
-        result = await conn.execute(text("""
+        result = await conn.execute(
+            text("""
             UPDATE safety_reports sr
             SET manager_id_snapshot = u.manager_id,
                 department_snapshot = u.department,
@@ -107,33 +115,46 @@ async def apply_pending_migrations() -> None:
               AND sr.manager_id_snapshot IS NULL
               AND sr.department_snapshot IS NULL
               AND sr.facility_snapshot IS NULL
-        """))
+        """)
+        )
         backfilled = result.rowcount if result.rowcount is not None else 0
 
     # --- Transaction 2: performance indexes (each isolated so one failure ---
     # doesn't roll back the others or the schema changes above).
     _indexes = [
         # event list ORDER BY (status ASC, created_at DESC)
-        ("idx_events_status_created", """
+        (
+            "idx_events_status_created",
+            """
             CREATE INDEX IF NOT EXISTS idx_events_status_created
                 ON events (status ASC, created_at DESC)
-        """),
+        """,
+        ),
         # ARRAY containment operator (@>) for facility scoping; requires GIN.
-        ("idx_events_facility_gin", """
+        (
+            "idx_events_facility_gin",
+            """
             CREATE INDEX IF NOT EXISTS idx_events_facility_gin
                 ON events USING GIN (facility)
-        """),
+        """,
+        ),
         # stats GROUP BY (event_id, status)
-        ("idx_safety_reports_event_status", """
+        (
+            "idx_safety_reports_event_status",
+            """
             CREATE INDEX IF NOT EXISTS idx_safety_reports_event_status
                 ON safety_reports (event_id, status)
-        """),
+        """,
+        ),
         # submit_report / my-report look up by (event_id, user_id) — hot path.
         # Also acts as a de-facto uniqueness enforcer (one row per user per event).
-        ("idx_safety_reports_event_user", """
+        (
+            "idx_safety_reports_event_user",
+            """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_safety_reports_event_user
                 ON safety_reports (event_id, user_id)
-        """),
+        """,
+        ),
     ]
     for name, sql in _indexes:
         try:
@@ -150,6 +171,7 @@ async def run(seed: bool) -> None:
     await apply_pending_migrations()
     if seed:
         from app.seed import seed_data
+
         await seed_data()
     await engine.dispose()
 

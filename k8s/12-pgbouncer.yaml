@@ -1,8 +1,14 @@
 # PgBouncer connection pooler — transaction mode.
 #
-# Sits between backend pods and PostgreSQL, multiplexing up to 1000 client
-# connections into ~50 real server connections. This allows the HPA to scale
-# backend pods beyond the DB max_connections ceiling without risk.
+# Sits between backend pods and PostgreSQL, multiplexing up to 2000 client
+# connections per pod into ~50 real server connections. This allows the HPA
+# to scale backend pods beyond the DB max_connections ceiling without risk.
+#
+# Capacity math (post-A2 sizing):
+#   - 3-6 pgbouncer pods × 2000 max_client_conn = 6,000-12,000 client slots
+#   - 3-6 pgbouncer pods × 50 default_pool_size = 150-300 server conns
+#   - Cloud SQL max_connections=400 flag leaves 100-250 headroom for
+#     direct/admin connections that bypass pgbouncer.
 #
 # After deploying this file, update k8s/02-secret.yaml.example:
 #   DATABASE_URL → postgresql+asyncpg://app:<pw>@pgbouncer:5432/safety_response
@@ -18,7 +24,10 @@ metadata:
   namespace: safety-system
 data:
   PGBOUNCER_POOL_MODE: "transaction"
-  PGBOUNCER_MAX_CLIENT_CONN: "1000"
+  # Bumped 1000 → 2000 per pod (A2). Under spike test HPA can land 50+
+  # backend pods × 15 (pool+overflow) = 750+ client conns per bouncer pod
+  # if traffic is uneven; 2000 absorbs that without `cl_waiting` queueing.
+  PGBOUNCER_MAX_CLIENT_CONN: "2000"
   PGBOUNCER_DEFAULT_POOL_SIZE: "50"
   PGBOUNCER_MIN_POOL_SIZE: "5"
   PGBOUNCER_RESERVE_POOL_SIZE: "10"
@@ -29,6 +38,14 @@ data:
   PGBOUNCER_LOG_CONNECTIONS: "0"
   PGBOUNCER_LOG_DISCONNECTIONS: "0"
   PGBOUNCER_LOG_POOLER_ERRORS: "1"
+  # Enable prepared-statement support in transaction-mode pooling.
+  # Without this, asyncpg's per-connection prepared statement cache collides
+  # whenever PgBouncer assigns the next transaction to a different server
+  # connection — producing `DuplicatePreparedStatementError __asyncpg_stmt_N__`
+  # under any non-trivial load. PgBouncer 1.21+ tracks PREPARE/EXECUTE/DEALLOCATE
+  # per client, replaying them on whatever server connection it routes to.
+  # 200 is comfortably above SQLAlchemy + asyncpg working-set size.
+  PGBOUNCER_MAX_PREPARED_STATEMENTS: "200"
   # Stage 3-B: upstream switched from in-cluster postgres to cloudsql-proxy,
   # which fronts the Cloud SQL HA instance via Workload Identity + private IP.
   POSTGRESQL_HOST: "cloudsql-proxy"
@@ -59,7 +76,12 @@ metadata:
   name: pgbouncer
   namespace: safety-system
 spec:
-  replicas: 2
+  # Baseline raised 2 → 3 (A2). HPA in k8s/12a-pgbouncer-hpa.yaml takes
+  # this up to 6 under load. Three replicas at idle keeps spare multiplexing
+  # capacity available the moment a spike starts — HPA needs ~30s to
+  # observe CPU before kicking new replicas, which is enough time to
+  # already be queueing at the bouncer.
+  replicas: 3
   selector:
     matchLabels:
       app: pgbouncer

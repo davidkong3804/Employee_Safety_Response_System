@@ -25,15 +25,14 @@ class SafetyReport(Base):
     They're nullable because (a) older rows pre-migration may be NULL
     until backfill, and (b) self-managed users have NULL manager_id.
     """
+
     __tablename__ = "safety_reports"
     __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_event_user"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("events.id"), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    status: Mapped[str] = mapped_column(
-        Enum("safe", "need_help", name="report_status"), nullable=True
-    )
+    status: Mapped[str] = mapped_column(Enum("safe", "need_help", name="report_status"), nullable=True)
     message: Mapped[str | None] = mapped_column(Text)
     reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

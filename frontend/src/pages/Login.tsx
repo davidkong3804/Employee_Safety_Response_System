@@ -34,7 +34,7 @@ export default function Login() {
         <div className="text-center mb-8">
           <Shield className="w-16 h-16 text-blue-900 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900">{t('login.title')}</h1>
-          <p className="text-gray-500 text-sm mt-1">Employee Safety & Response System</p>
+          <p className="text-gray-500 text-sm mt-1">{t('app.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

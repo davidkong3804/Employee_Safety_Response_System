@@ -19,6 +19,7 @@ reports buffered just before pod termination are not lost. Kubernetes sends
 SIGTERM → uvicorn triggers ASGI lifespan shutdown → stop_drainer() runs
 within the default 30 s termination grace period.
 """
+
 from __future__ import annotations
 
 import asyncio

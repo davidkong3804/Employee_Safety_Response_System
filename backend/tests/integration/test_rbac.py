@@ -3,6 +3,7 @@
 403 is checked BEFORE any DB lookup, so a fake UUID is sufficient for event/user IDs.
 If the role check passes, the endpoint returns 404 (not found) – not 403.
 """
+
 import pytest
 
 FAKE_UUID = "00000000-0000-0000-0000-000000000001"
@@ -14,7 +15,8 @@ FAKE_UUID = "00000000-0000-0000-0000-000000000001"
     [
         # Events – admin only
         (
-            "POST", "/api/events",
+            "POST",
+            "/api/events",
             {"title": "T", "event_type": "earthquake", "severity": "high"},
             ["manager", "employee"],
         ),
@@ -32,7 +34,8 @@ FAKE_UUID = "00000000-0000-0000-0000-000000000001"
         # Users – list: manager+; create/patch/delete: admin only
         ("GET", "/api/users", None, ["employee"]),
         (
-            "POST", "/api/users",
+            "POST",
+            "/api/users",
             {"employee_id": "X", "name": "X", "email": "x@x.com", "password": "x", "role": "employee"},
             ["manager", "employee"],
         ),
@@ -42,9 +45,16 @@ FAKE_UUID = "00000000-0000-0000-0000-000000000001"
 )
 async def test_forbidden_role_gets_403(
     client,
-    admin_user, manager_user, employee_user,
-    admin_headers, manager_headers, employee_headers,
-    method, path, body, forbidden_roles,
+    admin_user,
+    manager_user,
+    employee_user,
+    admin_headers,
+    manager_headers,
+    employee_headers,
+    method,
+    path,
+    body,
+    forbidden_roles,
 ):
     headers_map = {
         "admin": admin_headers,
@@ -56,9 +66,7 @@ async def test_forbidden_role_gets_403(
         if body:
             kwargs["json"] = body
         r = await getattr(client, method.lower())(path, **kwargs)
-        assert r.status_code == 403, (
-            f"{role} on {method} {path} expected 403, got {r.status_code}: {r.text}"
-        )
+        assert r.status_code == 403, f"{role} on {method} {path} expected 403, got {r.status_code}: {r.text}"
 
 
 @pytest.mark.integration
@@ -84,9 +92,16 @@ async def test_forbidden_role_gets_403(
 )
 async def test_allowed_role_does_not_get_403(
     client,
-    admin_user, manager_user, employee_user,
-    admin_headers, manager_headers, employee_headers,
-    method, path, body, allowed_roles,
+    admin_user,
+    manager_user,
+    employee_user,
+    admin_headers,
+    manager_headers,
+    employee_headers,
+    method,
+    path,
+    body,
+    allowed_roles,
 ):
     headers_map = {
         "admin": admin_headers,
@@ -98,10 +113,6 @@ async def test_allowed_role_does_not_get_403(
         if body:
             kwargs["json"] = body
         r = await getattr(client, method.lower())(path, **kwargs)
-        assert r.status_code != 403, (
-            f"{role} on {method} {path} should NOT be 403, got {r.status_code}: {r.text}"
-        )
+        assert r.status_code != 403, f"{role} on {method} {path} should NOT be 403, got {r.status_code}: {r.text}"
         # Also verify not 401 (unauthenticated)
-        assert r.status_code != 401, (
-            f"{role} on {method} {path} should NOT be 401, got {r.status_code}"
-        )
+        assert r.status_code != 401, f"{role} on {method} {path} should NOT be 401, got {r.status_code}"

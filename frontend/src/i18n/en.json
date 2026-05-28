@@ -1,11 +1,13 @@
 {
   "common": {
     "actions": "Actions",
-    "status": "Status"
+    "status": "Status",
+    "retry": "Retry",
+    "close": "Close"
   },
   "app": {
     "title": "Safety Response System",
-    "subtitle": "Employee Safety Response System"
+    "subtitle": "Employee Safety & Response System"
   },
   "nav": {
     "home": "Home",
@@ -24,13 +26,19 @@
   },
   "report": {
     "title": "Safety Report",
+    "update": "Update Report",
     "imSafe": "I'm Safe",
     "needHelp": "Need Help",
     "message": "Additional message (optional)",
     "submitted": "Report submitted!",
     "failed": "Report failed, please retry",
+    "failedNetwork": "Connection unstable. Check your network and retry.",
+    "failedServer": "Server busy. Please try again shortly.",
+    "failedRateLimit": "Too many requests, please try again later",
+    "failedAmbiguous": "Submission error. Return to home to confirm your status.",
     "alreadyReported": "You have already reported",
-    "status": "Your Status"
+    "status": "Your Status",
+    "updateHint": "Want to update? Tap again."
   },
   "status": {
     "safe": "Safe",
@@ -49,6 +57,7 @@
     "delete": "Delete Event",
     "statusLabel": "Status",
     "noEvents": "No active events",
+    "loadError": "Failed to load events",
     "createdAt": "Created",
     "createSuccess": "Event created",
     "createFailed": "Failed to create event",
@@ -92,7 +101,9 @@
     "remindFailed": "Failed to send reminders",
     "showing": "Showing {{shown}} / {{total}}",
     "searchPlaceholder": "Search name or ID",
-    "noResults": "No matching reports"
+    "noResults": "No matching reports",
+    "note": "Note",
+    "remarkFrom": "Message from {{name}}"
   },
   "user": {
     "create": "Create User",
@@ -110,6 +121,7 @@
     "deactivateFailed": "Failed to deactivate user",
     "deactivateConfirm": "Deactivate this user? They will no longer be able to log in.",
     "creating": "Creating...",
+    "noUsers": "No matching users found",
     "roles": {
       "admin": "Admin",
       "manager": "Manager",
@@ -125,6 +137,15 @@
     "reportByEvent": "Report Status by Event",
     "overallDistribution": "Overall Status Distribution"
   },
+  "reminder": {
+    "banner": "Your manager is reminding you to report your status for \"{{event}}\". Please report now.",
+    "bannerMulti": "Your manager is reminding you to report status for {{count}} event(s). Please report now.",
+    "modalTitle": "You Have Unreported Events",
+    "modalBody": "Your manager is reminding you to report your status for \"{{event}}\". Please report now.",
+    "modalBodyMulti": "Your manager is reminding you to report status for {{count}} event(s). Please report now.",
+    "modalGoReport": "Report Now",
+    "modalLater": "Later"
+  },
   "facility": {
     "selectFacilities": "Select Affected Facilities",
     "taiwan": "Taiwan",
@@ -138,6 +159,7 @@
     "japan": "Japan",
     "kumamoto": "Kumamoto",
     "germany": "Germany",
-    "dresden": "Saxony / Dresden"
+    "dresden": "Saxony / Dresden",
+    "fabsCount": "({{count}} fabs)"
   }
 }

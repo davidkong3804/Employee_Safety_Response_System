@@ -34,6 +34,7 @@ Usage
     python -m app.prune_users           # dry-run: prints what would be deleted
     python -m app.prune_users --apply   # actually delete
 """
+
 import asyncio
 import re
 import sys
@@ -51,9 +52,7 @@ _EMP_ID_RE = re.compile(r"^E(\d+)$")
 
 async def find_surplus_user_ids(session) -> list:
     """Return UUIDs of employees whose numeric suffix > cap."""
-    rows = (await session.execute(
-        select(User.id, User.employee_id).where(User.role == "employee")
-    )).all()
+    rows = (await session.execute(select(User.id, User.employee_id).where(User.role == "employee"))).all()
     surplus = []
     for uid, eid in rows:
         m = _EMP_ID_RE.match(eid or "")
@@ -79,22 +78,12 @@ async def prune(apply: bool) -> None:
             return
 
         # Order: children first (no ON DELETE CASCADE on the FKs).
-        rem = await session.execute(
-            delete(Reminder).where(Reminder.user_id.in_(surplus_ids))
-        )
-        rep = await session.execute(
-            delete(SafetyReport).where(SafetyReport.user_id.in_(surplus_ids))
-        )
-        usr = await session.execute(
-            delete(User).where(User.id.in_(surplus_ids))
-        )
+        rem = await session.execute(delete(Reminder).where(Reminder.user_id.in_(surplus_ids)))
+        rep = await session.execute(delete(SafetyReport).where(SafetyReport.user_id.in_(surplus_ids)))
+        usr = await session.execute(delete(User).where(User.id.in_(surplus_ids)))
         await session.commit()
 
-        print(
-            f"✅ Pruned: {usr.rowcount} users, "
-            f"{rep.rowcount} safety_reports, "
-            f"{rem.rowcount} reminders."
-        )
+        print(f"✅ Pruned: {usr.rowcount} users, " f"{rep.rowcount} safety_reports, " f"{rem.rowcount} reminders.")
 
 
 async def main(apply: bool) -> None:

@@ -1,4 +1,5 @@
 """Unit tests for Pydantic schemas – no database required."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -91,6 +92,47 @@ class TestUserCreate:
         with pytest.raises(ValidationError):
             UserCreate(employee_id="E001", name="Alice")
 
+    def test_phone_normalization(self):
+        u1 = UserCreate(
+            employee_id="E001",
+            name="Alice",
+            email="alice@example.com",
+            password="pw",
+            role="employee",
+            phone="0912345678",
+        )
+        assert u1.phone == "0912-345-678"
+
+        u2 = UserCreate(
+            employee_id="E001",
+            name="Alice",
+            email="alice@example.com",
+            password="pw",
+            role="employee",
+            phone="886912345678",
+        )
+        assert u2.phone == "0912-345-678"
+
+        u3 = UserCreate(
+            employee_id="E001",
+            name="Alice",
+            email="alice@example.com",
+            password="pw",
+            role="employee",
+            phone="0912-345-678",
+        )
+        assert u3.phone == "0912-345-678"
+
+        u4 = UserCreate(
+            employee_id="E001",
+            name="Alice",
+            email="alice@example.com",
+            password="pw",
+            role="employee",
+            phone="123456",
+        )
+        assert u4.phone == "123456"
+
 
 class TestUserUpdate:
     def test_all_optional(self):
@@ -102,3 +144,7 @@ class TestUserUpdate:
         dumped = u.model_dump(exclude_unset=True)
         assert dumped["role"] == "manager"
         assert dumped["is_active"] is False
+
+    def test_phone_normalization(self):
+        u = UserUpdate(phone="0912345678")
+        assert u.phone == "0912-345-678"

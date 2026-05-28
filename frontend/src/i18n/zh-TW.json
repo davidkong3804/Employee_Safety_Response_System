@@ -1,11 +1,13 @@
 {
   "common": {
     "actions": "操作",
-    "status": "狀態"
+    "status": "狀態",
+    "retry": "重試",
+    "close": "關閉"
   },
   "app": {
     "title": "企業安全回報系統",
-    "subtitle": "Employee Safety Response System"
+    "subtitle": "Employee Safety & Response System"
   },
   "nav": {
     "home": "首頁",
@@ -24,13 +26,19 @@
   },
   "report": {
     "title": "安全回報",
+    "update": "更新回報",
     "imSafe": "我是安全的",
     "needHelp": "需要協助",
     "message": "附加訊息（選填）",
     "submitted": "回報成功！",
     "failed": "回報失敗，請重試",
+    "failedNetwork": "網路不穩，請檢查連線後重試",
+    "failedServer": "伺服器暫時忙碌，請稍後再試",
+    "failedRateLimit": "請求過於頻繁，請稍後再試",
+    "failedAmbiguous": "送出時發生錯誤，請回首頁確認狀態",
     "alreadyReported": "您已回報",
-    "status": "您的狀態"
+    "status": "您的狀態",
+    "updateHint": "想更新狀態？再次選擇即可"
   },
   "status": {
     "safe": "安全",
@@ -49,6 +57,7 @@
     "delete": "刪除事件",
     "statusLabel": "事件狀態",
     "noEvents": "目前無進行中的事件",
+    "loadError": "無法載入事件清單",
     "createdAt": "建立時間",
     "createSuccess": "事件建立成功",
     "createFailed": "事件建立失敗",
@@ -92,7 +101,9 @@
     "remindFailed": "發送提醒失敗",
     "showing": "顯示 {{shown}} / {{total}} 筆",
     "searchPlaceholder": "搜尋姓名或工號",
-    "noResults": "沒有符合條件的回報"
+    "noResults": "沒有符合條件的回報",
+    "note": "備註",
+    "remarkFrom": "來自 {{name}} 的說明"
   },
   "user": {
     "create": "新增使用者",
@@ -110,6 +121,7 @@
     "deactivateFailed": "停用使用者失敗",
     "deactivateConfirm": "確定要停用這位使用者嗎？停用後將無法登入。",
     "creating": "建立中...",
+    "noUsers": "沒有符合條件的使用者",
     "roles": {
       "admin": "管理員",
       "manager": "主管",
@@ -125,6 +137,15 @@
     "reportByEvent": "各事件回報狀態",
     "overallDistribution": "整體狀態分佈"
   },
+  "reminder": {
+    "banner": "主管提醒您尚未回報事件「{{event}}」，請立即前往回報",
+    "bannerMulti": "主管提醒您有 {{count}} 件事件尚未回報，請立即前往回報",
+    "modalTitle": "您有未回報的事件",
+    "modalBody": "主管提醒您尚未回報事件「{{event}}」，請立即前往回報。",
+    "modalBodyMulti": "主管提醒您有 {{count}} 件事件尚未回報，請立即前往回報。",
+    "modalGoReport": "立即前往回報",
+    "modalLater": "稍後再說"
+  },
   "facility": {
     "selectFacilities": "選擇受影響廠區",
     "taiwan": "台灣",
@@ -138,6 +159,7 @@
     "japan": "日本",
     "kumamoto": "熊本縣",
     "germany": "德國",
-    "dresden": "薩克森・德勒斯登"
+    "dresden": "薩克森・德勒斯登",
+    "fabsCount": "({{count}} 個廠區)"
   }
 }

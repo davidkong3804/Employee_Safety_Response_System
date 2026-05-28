@@ -20,7 +20,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base, get_db
+from app.database import Base, get_db, get_read_db
 from app.main import app
 from app.modules.auth.router import create_access_token, hash_password
 from app.modules.events.models import Event
@@ -28,10 +28,12 @@ from app.modules.notifications.models import Reminder
 from app.modules.reports.models import SafetyReport
 from app.modules.users.models import User
 
+
 # Replace lifespan with a no-op so tests fully control schema setup/teardown
 @asynccontextmanager
 async def _noop_lifespan(application):
     yield
+
 
 app.router.lifespan_context = _noop_lifespan
 
@@ -77,6 +79,7 @@ async def client(db_session):
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
@@ -85,6 +88,7 @@ async def client(db_session):
 # ---------------------------------------------------------------------------
 # User fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture()
 async def admin_user(db_session) -> User:
@@ -142,6 +146,7 @@ async def employee_user(db_session, manager_user) -> User:
 # Auth header fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def admin_headers(admin_user) -> dict:
     return {"Authorization": f"Bearer {create_access_token(str(admin_user.id))}"}
@@ -178,6 +183,7 @@ async def employee_other_fab(db_session, manager_user) -> User:
 # ---------------------------------------------------------------------------
 # Event fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture()
 async def active_event(db_session, admin_user, manager_user, employee_user) -> Event:

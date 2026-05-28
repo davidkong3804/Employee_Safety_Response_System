@@ -35,6 +35,18 @@ engine = create_async_engine(
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+read_engine = create_async_engine(
+    _disable_prepared_stmt_cache(settings.READ_DATABASE_URL or settings.DATABASE_URL),
+    echo=False,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_recycle=settings.DB_POOL_RECYCLE,
+    pool_pre_ping=True,
+    connect_args={"statement_cache_size": 0},
+)
+async_read_session = async_sessionmaker(read_engine, class_=AsyncSession, expire_on_commit=False)
+
 
 class Base(DeclarativeBase):
     pass
@@ -45,6 +57,15 @@ async def get_db():
         try:
             yield session
             await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def get_read_db():
+    async with async_read_session() as session:
+        try:
+            yield session
         except Exception:
             await session.rollback()
             raise

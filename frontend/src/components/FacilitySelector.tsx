@@ -119,7 +119,9 @@ export default function FacilitySelector({ value, onChange }: Props) {
                 onClick={e => e.stopPropagation()}
               />
               <span className="font-semibold">{t(`facility.${country.key}`)}</span>
-              <span className="text-xs text-gray-400 ml-1.5">({countryFabs.length} fabs)</span>
+              <span className="text-xs text-gray-400 ml-1.5">
+                {t('facility.fabsCount', { count: countryFabs.length })}
+              </span>
             </div>
 
             {countryOpen && country.regions.map(region => {

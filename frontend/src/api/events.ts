@@ -1,8 +1,8 @@
 import client from './client'
 import type { Event } from '../types'
 
-export async function listEvents() {
-  const { data } = await client.get('/api/events')
+export async function listEvents(config?: { signal?: AbortSignal }) {
+  const { data } = await client.get('/api/events', config)
   return data as Event[]
 }
 

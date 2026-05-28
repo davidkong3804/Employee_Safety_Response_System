@@ -14,11 +14,13 @@ export default function EventManagement() {
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] as string[] })
 
+  // Returns the underlying promise so callers (e.g. handleCreate) can
+  // `await load()` and only act after the refetch lands.
   const load = () => {
-    listEvents().then(setEvents).finally(() => setLoading(false))
+    return listEvents().then(setEvents).finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(() => { void load() }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,9 +30,12 @@ export default function EventManagement() {
       const { facilities, ...rest } = form
       await createEvent({ ...rest, facility: facilities.length > 0 ? facilities : undefined })
       toast.success(t('event.createSuccess'))
+      // Refetch BEFORE closing the modal so the new event is already
+      // visible in the table when the dialog dismisses — avoids the
+      // empty-modal-then-flicker UX.
+      await load()
       setShowCreate(false)
       setForm({ title: '', description: '', event_type: 'earthquake', severity: 'high', facilities: [] })
-      load()
     } catch {
       toast.error(t('event.createFailed'))
     } finally {
@@ -157,37 +162,49 @@ export default function EventManagement() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {events.map(ev => (
-              <tr key={ev.id} className={ev.status === 'active' ? 'bg-red-50/50' : ''}>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {ev.status === 'active' && <AlertTriangle className="w-4 h-4 text-red-500" />}
-                    <span className="font-medium">{ev.title}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-sm">{t(`event.types.${ev.event_type}`)}</td>
-                <td className="px-4 py-3">{severityBadge(ev.severity)}</td>
-                <td className="px-4 py-3 text-sm">{ev.facility && ev.facility.length > 0 ? ev.facility.join(', ') : t('event.allFacilities')}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    ev.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                  }`}>{t(`event.${ev.status}`)}</span>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-500">{new Date(ev.created_at).toLocaleString()}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {ev.status === 'active' && (
-                      <button onClick={() => handleClose(ev.id)} className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200">
-                        {t('event.close')}
-                      </button>
-                    )}
-                    <button onClick={() => handleDelete(ev.id)} className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200">
-                      {t('event.delete')}
-                    </button>
+            {events.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <div className="flex flex-col items-center justify-center">
+                    <AlertTriangle className="w-8 h-8 text-gray-300 mb-2" />
+                    <p className="font-semibold text-base">{t('event.noEvents')}</p>
+                    <p className="text-xs text-gray-400 mt-1">Click the "Create Event" button to get started.</p>
                   </div>
                 </td>
               </tr>
-            ))}
+            ) : (
+              events.map(ev => (
+                <tr key={ev.id} className={ev.status === 'active' ? 'bg-red-50/50' : ''}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {ev.status === 'active' && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                      <span className="font-medium">{ev.title}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{t(`event.types.${ev.event_type}`)}</td>
+                  <td className="px-4 py-3">{severityBadge(ev.severity)}</td>
+                  <td className="px-4 py-3 text-sm">{ev.facility && ev.facility.length > 0 ? ev.facility.join(', ') : t('event.allFacilities')}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      ev.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                    }`}>{t(`event.${ev.status}`)}</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{new Date(ev.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {ev.status === 'active' && (
+                        <button onClick={() => handleClose(ev.id)} className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200">
+                          {t('event.close')}
+                        </button>
+                      )}
+                      <button onClick={() => handleDelete(ev.id)} className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded hover:bg-red-200">
+                        {t('event.delete')}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

@@ -21,7 +21,10 @@ metadata:
   name: backend
   namespace: safety-system
 spec:
-  replicas: 1
+  # Initial replica count. The HPA in 07-backend-hpa.yaml owns this field at
+  # runtime — kept aligned with HPA minReplicas (3) so a fresh apply doesn't
+  # transiently drop the cluster to 1 pod before the HPA's first eval cycle.
+  replicas: 3
   selector:
     matchLabels:
       app: backend
@@ -104,15 +107,23 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           resources:
+            # Stage 1 scaling: 250m / 1000m gives each pod ~2× the CPU
+            # headroom of the previous 100m/500m sizing. The HPA targets 60%
+            # CPU, so a pod will scale out when it crosses ~600m utilization
+            # — leaves room for the asyncpg pool to saturate before the pod
+            # itself becomes the bottleneck. Combined with replicas=3 →
+            # baseline cluster handles ~750m × 3 ≈ 2.2 vCPU of steady-state
+            # FastAPI work; with HPA the cluster can flex up to 60 × 1 =
+            # 60 vCPU of backend capacity.
             requests:
-              cpu: 100m
+              cpu: 250m
               # Sized for stress-test density: 30+ pods on a 2-4 e2-medium
-              # pool. FastAPI + asyncpg pool baseline is ~120-140 MB; 192Mi
-              # gives ~50 MB headroom before the 384Mi limit kicks in.
-              memory: 192Mi
+              # pool. FastAPI + asyncpg pool baseline is ~120-140 MB; 256Mi
+              # gives ~110 MB headroom before the 512Mi limit kicks in.
+              memory: 256Mi
             limits:
-              cpu: 500m
-              memory: 384Mi
+              cpu: 1000m
+              memory: 512Mi
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

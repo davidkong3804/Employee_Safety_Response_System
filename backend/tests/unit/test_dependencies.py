@@ -1,4 +1,5 @@
 """Unit tests for require_role dependency – no database required."""
+
 from unittest.mock import MagicMock
 
 import pytest

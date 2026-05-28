@@ -1,4 +1,5 @@
 """Unit tests for auth utility functions – no database required."""
+
 from datetime import datetime, timedelta, timezone
 
 import pytest

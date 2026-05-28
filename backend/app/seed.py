@@ -18,7 +18,7 @@ DEFAULT_PASSWORD = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()
 # are auto-generated test accounts (E0031–E0500). Bump this number if
 # stress tests need more capacity — both seed.py and locustfile.py should
 # stay in sync.
-LOAD_TEST_MAX_EMPLOYEES = 500
+LOAD_TEST_MAX_EMPLOYEES = 15000
 
 
 async def seed_data():
@@ -41,13 +41,8 @@ async def seed_data():
     """
     async with async_session() as session:
         # ---- existing-data snapshot -------------------------------------
-        existing_emp_ids = {
-            row[0]
-            for row in (await session.execute(select(User.employee_id))).all()
-        }
-        events_already_exist = (
-            await session.execute(select(Event).limit(1))
-        ).scalar_one_or_none() is not None
+        existing_emp_ids = {row[0] for row in (await session.execute(select(User.employee_id))).all()}
+        events_already_exist = (await session.execute(select(Event).limit(1))).scalar_one_or_none() is not None
 
         added_user_count = 0
 
@@ -62,20 +57,27 @@ async def seed_data():
         for eid, name, email, role, dept, facility, phone in manager_data:
             if eid in existing_emp_ids:
                 continue
-            session.add(User(
-                employee_id=eid, name=name, email=email,
-                password_hash=DEFAULT_PASSWORD, role=role,
-                department=dept, facility=facility, phone=phone,
-            ))
+            session.add(
+                User(
+                    employee_id=eid,
+                    name=name,
+                    email=email,
+                    password_hash=DEFAULT_PASSWORD,
+                    role=role,
+                    department=dept,
+                    facility=facility,
+                    phone=phone,
+                )
+            )
             added_user_count += 1
         await session.flush()
 
         # Refresh: managers list contains both pre-existing and just-created rows,
         # ordered by employee_id so mgr_idx 0..4 maps to M001..M005 deterministically.
         managers = list(
-            (await session.execute(
-                select(User).where(User.role == "manager").order_by(User.employee_id)
-            )).scalars().all()
+            (await session.execute(select(User).where(User.role == "manager").order_by(User.employee_id)))
+            .scalars()
+            .all()
         )
 
         # ---- admins -----------------------------------------------------
@@ -87,18 +89,23 @@ async def seed_data():
         for eid, name, email, role, dept, facility, phone in admin_data:
             if eid in existing_emp_ids:
                 continue
-            session.add(User(
-                employee_id=eid, name=name, email=email,
-                password_hash=DEFAULT_PASSWORD, role=role,
-                department=dept, facility=facility, phone=phone,
-            ))
+            session.add(
+                User(
+                    employee_id=eid,
+                    name=name,
+                    email=email,
+                    password_hash=DEFAULT_PASSWORD,
+                    role=role,
+                    department=dept,
+                    facility=facility,
+                    phone=phone,
+                )
+            )
             added_user_count += 1
         await session.flush()
 
         admins = list(
-            (await session.execute(
-                select(User).where(User.role == "admin").order_by(User.employee_id)
-            )).scalars().all()
+            (await session.execute(select(User).where(User.role == "admin").order_by(User.employee_id))).scalars().all()
         )
 
         # ---- employees E001–E030 (named) -------------------------------
@@ -137,34 +144,45 @@ async def seed_data():
         for eid, name, email, dept, facility, phone, mgr_idx in employee_data:
             if eid in existing_emp_ids:
                 continue
-            session.add(User(
-                employee_id=eid, name=name, email=email,
-                password_hash=DEFAULT_PASSWORD, role="employee",
-                department=dept, facility=facility, phone=phone,
-                manager_id=managers[mgr_idx].id,
-            ))
+            session.add(
+                User(
+                    employee_id=eid,
+                    name=name,
+                    email=email,
+                    password_hash=DEFAULT_PASSWORD,
+                    role="employee",
+                    department=dept,
+                    facility=facility,
+                    phone=phone,
+                    manager_id=managers[mgr_idx].id,
+                )
+            )
             added_user_count += 1
         await session.flush()
 
         # ---- extra load-test employees E0031 – E{LOAD_TEST_MAX_EMPLOYEES} -
-        depts    = ["製造一部", "製造二部", "製造一部", "設備部", "品質部"]
+        depts = ["製造一部", "製造二部", "製造一部", "設備部", "品質部"]
         facilits = ["Fab14", "Fab14", "Fab18", "Fab14", "Fab18"]
         for i in range(31, LOAD_TEST_MAX_EMPLOYEES + 1):
             eid = f"E{i:04d}"
             if eid in existing_emp_ids:
                 continue
             mgr_idx = (i - 1) % len(managers)
-            session.add(User(
-                employee_id=eid,
-                name=f"測試員工{i:04d}",
-                email=f"test.emp{i:04d}@tsmc.com",
-                password_hash=DEFAULT_PASSWORD,
-                role="employee",
-                department=depts[mgr_idx],
-                facility=facilits[mgr_idx],
-                phone=f"09{i:08d}",
-                manager_id=managers[mgr_idx].id,
-            ))
+            phone_raw = f"09{i:08d}"
+            phone = f"{phone_raw[:4]}-{phone_raw[4:7]}-{phone_raw[7:]}"
+            session.add(
+                User(
+                    employee_id=eid,
+                    name=f"測試員工{i:04d}",
+                    email=f"test.emp{i:04d}@tsmc.com",
+                    password_hash=DEFAULT_PASSWORD,
+                    role="employee",
+                    department=depts[mgr_idx],
+                    facility=facilits[mgr_idx],
+                    phone=phone,
+                    manager_id=managers[mgr_idx].id,
+                )
+            )
             added_user_count += 1
         await session.flush()
 
@@ -176,23 +194,24 @@ async def seed_data():
             # Mirrors the production POST /api/events logic: filter by event
             # facility (NULL = all) and only include is_active users.
             topped_up = 0
-            active_events = (await session.execute(
-                select(Event).where(Event.status == "active")
-            )).scalars().all()
+            active_events = (await session.execute(select(Event).where(Event.status == "active"))).scalars().all()
 
             for ev in active_events:
                 # Existing user_ids already covered for this event
                 existing_uids = {
                     row[0]
-                    for row in (await session.execute(
-                        select(SafetyReport.user_id).where(SafetyReport.event_id == ev.id)
-                    )).all()
+                    for row in (
+                        await session.execute(select(SafetyReport.user_id).where(SafetyReport.event_id == ev.id))
+                    ).all()
                 }
                 # Target users — fetch with org context so we can snapshot
                 # them onto each new placeholder (C6: keeps historical
                 # manager/department/facility queries stable).
                 users_q = select(
-                    User.id, User.manager_id, User.department, User.facility,
+                    User.id,
+                    User.manager_id,
+                    User.department,
+                    User.facility,
                 ).where(User.is_active.is_(True))
                 if ev.facility:
                     users_q = users_q.where(User.facility.in_(ev.facility))
@@ -233,9 +252,7 @@ async def seed_data():
         # ---- fresh-DB only: build demo events + placeholder reports ----
         # Need the full user list (admins + managers + all employees) to
         # generate a placeholder report per user.
-        all_users = list(
-            (await session.execute(select(User))).scalars().all()
-        )
+        all_users = list((await session.execute(select(User))).scalars().all())
 
         event1 = Event(
             title="2026-04-13 台南地震警報",
@@ -277,11 +294,13 @@ async def seed_data():
                 report.reported_at = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 30))
             elif roll < 0.45:
                 report.status = "need_help"
-                report.message = random.choice([
-                    "被困在無塵室，需要協助撤離",
-                    "腳部受傷，需要醫療支援",
-                    "設備傾倒擋住出口，需要救援",
-                ])
+                report.message = random.choice(
+                    [
+                        "被困在無塵室，需要協助撤離",
+                        "腳部受傷，需要醫療支援",
+                        "設備傾倒擋住出口，需要救援",
+                    ]
+                )
                 report.reported_at = datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 20))
             session.add(report)
 
@@ -305,9 +324,7 @@ async def seed_data():
             session.add(report)
 
         await session.commit()
-        print(
-            f"✅ Demo data seeded successfully! ({added_user_count} users + 2 events + placeholder reports)"
-        )
+        print(f"✅ Demo data seeded successfully! ({added_user_count} users + 2 events + placeholder reports)")
         print("   Login accounts (password: password123):")
         print("   Admin:    A001 (廖唯辰)")
         print("   Manager:  M001 (王建明)")

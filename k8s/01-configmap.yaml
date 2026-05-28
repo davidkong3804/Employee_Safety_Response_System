@@ -8,7 +8,7 @@ data:
   # 3-C: Update to Cloud Memorystore private IP after provisioning.
   # gcloud redis instances describe safety-redis --region=REGION --format='get(host)'
   # Until then, keep pointing at the in-cluster redis pod (k8s/04-redis.yaml).
-  REDIS_URL: "redis://redis:6379"
+  REDIS_URL: "redis://172.27.0.3:6379"
   JWT_EXPIRE_MINUTES: "480"
 
   # CORS: the Ingress serves the SPA and /api from the same host, so requests

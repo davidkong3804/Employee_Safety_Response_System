@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { RefreshCw, Bell, Search } from 'lucide-react'
+import { RefreshCw, Bell, Search, MessageSquare, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { List, type RowComponentProps } from 'react-window'
 import { listEvents } from '../../api/events'
-import { getEventStats, getStatsByDepartment, getTeamStatus, triggerReminders, type TeamStatusParams } from '../../api/reports'
+import {
+  getEventStats,
+  getStatsByDepartment,
+  getTeamStatus,
+  triggerReminders,
+  type TeamStatusParams,
+} from '../../api/reports'
 import StatusBadge from '../../components/StatusBadge'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Event, EventStats, DepartmentStats, SafetyReport } from '../../types'
@@ -36,6 +42,7 @@ export default function Dashboard() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [activeMessage, setActiveMessage] = useState<{ userName: string; message: string } | null>(null)
   const loadingMoreRef = useRef(false)
 
   // Debounce search box → 300ms after the user stops typing the actual
@@ -47,20 +54,25 @@ export default function Dashboard() {
 
   // Initial event list
   useEffect(() => {
-    listEvents().then(evts => {
-      setEvents(evts)
-      const active = evts.find(e => e.status === 'active')
-      if (active) setSelectedEventId(active.id)
-    }).finally(() => setLoading(false))
+    listEvents()
+      .then((evts) => {
+        setEvents(evts)
+        const active = evts.find((e) => e.status === 'active')
+        if (active) setSelectedEventId(active.id)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
-  const buildQuery = useCallback((offset: number): TeamStatusParams => ({
-    limit: PAGE_SIZE,
-    offset,
-    department: filterDept || undefined,
-    status: filterStatus || undefined,
-    search: debouncedSearch || undefined,
-  }), [filterDept, filterStatus, debouncedSearch])
+  const buildQuery = useCallback(
+    (offset: number): TeamStatusParams => ({
+      limit: PAGE_SIZE,
+      offset,
+      department: filterDept || undefined,
+      status: filterStatus || undefined,
+      search: debouncedSearch || undefined,
+    }),
+    [filterDept, filterStatus, debouncedSearch],
+  )
 
   // Fetch stats + dept aggregate + first page of the employee list. Called
   // when the event changes, a filter changes, or the user hits Refresh.
@@ -82,21 +94,26 @@ export default function Dashboard() {
     }
   }, [selectedEventId, buildQuery])
 
-  useEffect(() => { reloadAll() }, [reloadAll])
+  useEffect(() => {
+    reloadAll()
+  }, [reloadAll])
 
-  // 30s polling — only refreshes the KPI cards and dept chart (both already
-  // Redis-cached on the backend, cheap). The list is left alone so the
-  // user's scroll position and visible rows don't pop on every tick.
+  // 30s polling — refreshes KPI cards, dept chart, and the event list (so
+  // a newly-created admin event shows up in the selector without F5). The
+  // detailed employee list is intentionally left alone so the user's scroll
+  // position and visible rows don't pop on every tick.
   useEffect(() => {
     if (!selectedEventId) return
     const tick = async () => {
       try {
-        const [s, ds] = await Promise.all([
+        const [s, ds, evts] = await Promise.all([
           getEventStats(selectedEventId),
           getStatsByDepartment(selectedEventId),
+          listEvents(),
         ])
         setStats(s)
         setDeptStats(ds)
+        setEvents(evts)
       } catch {
         // swallow — next tick or manual refresh will retry
       }
@@ -112,7 +129,7 @@ export default function Dashboard() {
     loadingMoreRef.current = true
     try {
       const page = await getTeamStatus(selectedEventId, buildQuery(reports.length))
-      setReports(prev => [...prev, ...page.items])
+      setReports((prev) => [...prev, ...page.items])
       setTotal(page.total)
     } finally {
       loadingMoreRef.current = false
@@ -137,13 +154,15 @@ export default function Dashboard() {
     )
   }
 
-  const pieData = stats ? [
-    { name: t('status.safe'), value: stats.safe, color: COLORS.safe },
-    { name: t('status.need_help'), value: stats.need_help, color: COLORS.need_help },
-    { name: t('status.unreported'), value: stats.unreported, color: COLORS.unreported },
-  ] : []
+  const pieData = stats
+    ? [
+        { name: t('status.safe'), value: stats.safe, color: COLORS.safe },
+        { name: t('status.need_help'), value: stats.need_help, color: COLORS.need_help },
+        { name: t('status.unreported'), value: stats.unreported, color: COLORS.unreported },
+      ]
+    : []
 
-  const barData = deptStats.map(d => ({
+  const barData = deptStats.map((d) => ({
     name: d.department,
     [t('status.safe')]: d.safe,
     [t('status.need_help')]: d.need_help,
@@ -157,17 +176,22 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <select
             value={selectedEventId}
-            onChange={e => setSelectedEventId(e.target.value)}
+            onChange={(e) => setSelectedEventId(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg"
           >
-            {events.map(ev => (
-              <option key={ev.id} value={ev.id}>{ev.title}</option>
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.title}
+              </option>
             ))}
           </select>
           <button onClick={reloadAll} className="p-2 hover:bg-gray-100 rounded-lg" title={t('dashboard.refresh')}>
             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleRemind} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">
+          <button
+            onClick={handleRemind}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+          >
             <Bell className="w-4 h-4" />
             {t('dashboard.remind')}
           </button>
@@ -192,7 +216,9 @@ export default function Dashboard() {
           <div className="bg-gray-50 rounded-xl p-5 shadow-sm border border-gray-200">
             <p className="text-sm text-gray-500">{t('status.unreported')}</p>
             <p className="text-3xl font-bold text-gray-700">{stats.unreported}</p>
-            <p className="text-sm text-blue-600 mt-1">{t('dashboard.reportRate')}: {stats.report_rate}%</p>
+            <p className="text-sm text-blue-600 mt-1">
+              {t('dashboard.reportRate')}: {stats.report_rate}%
+            </p>
           </div>
         </div>
       )}
@@ -203,7 +229,16 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold mb-4">{t('dashboard.reportRate')}</h2>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={100}
+                paddingAngle={3}
+                dataKey="value"
+                label={({ name, value }) => `${name}: ${value}`}
+              >
                 {pieData.map((entry, idx) => (
                   <Cell key={idx} fill={entry.color} />
                 ))}
@@ -234,30 +269,42 @@ export default function Dashboard() {
       <div className="bg-white rounded-xl shadow-sm border">
         <div className="p-4 border-b flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold">{t('dashboard.employeeList')}</h2>
-          <span className="text-sm text-gray-500">
-            {t('dashboard.showing', { shown: reports.length, total })}
-          </span>
+          <span className="text-sm text-gray-500">{t('dashboard.showing', { shown: reports.length, total })}</span>
           <div className="flex items-center gap-2 ml-auto">
             <div className="relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={t('dashboard.searchPlaceholder')}
                 className="pl-7 pr-2 py-1 border rounded text-sm w-48"
               />
             </div>
             {isAdmin && (
-              <select value={filterDept} onChange={e => setFilterDept(e.target.value)} className="px-2 py-1 border rounded text-sm">
-                <option value="">{t('dashboard.department')}: {t('dashboard.all')}</option>
-                {deptStats.map(d => (
-                  <option key={d.department} value={d.department}>{d.department}</option>
+              <select
+                value={filterDept}
+                onChange={(e) => setFilterDept(e.target.value)}
+                className="px-2 py-1 border rounded text-sm"
+              >
+                <option value="">
+                  {t('dashboard.department')}: {t('dashboard.all')}
+                </option>
+                {deptStats.map((d) => (
+                  <option key={d.department} value={d.department}>
+                    {d.department}
+                  </option>
                 ))}
               </select>
             )}
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as StatusFilter)} className="px-2 py-1 border rounded text-sm">
-              <option value="">{t('common.status')}: {t('dashboard.all')}</option>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}
+              className="px-2 py-1 border rounded text-sm"
+            >
+              <option value="">
+                {t('common.status')}: {t('dashboard.all')}
+              </option>
               <option value="need_help">{t('status.need_help')}</option>
               <option value="unreported">{t('status.unreported')}</option>
               <option value="safe">{t('status.safe')}</option>
@@ -269,15 +316,16 @@ export default function Dashboard() {
 
         <div style={{ height: LIST_HEIGHT }}>
           {reports.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              {t('dashboard.noResults')}
-            </div>
+            <div className="flex items-center justify-center h-full text-gray-400">{t('dashboard.noResults')}</div>
           ) : (
             <List
               rowCount={reports.length}
               rowHeight={ROW_HEIGHT}
               rowComponent={ReportRow}
-              rowProps={{ reports }}
+              rowProps={{
+                reports,
+                onShowMessage: (userName: string, message: string) => setActiveMessage({ userName, message }),
+              }}
               overscanCount={8}
               onRowsRendered={({ stopIndex }) => {
                 if (stopIndex >= reports.length - LOAD_AHEAD) {
@@ -288,47 +336,109 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+      {activeMessage && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border border-gray-100 transform transition-all scale-100">
+            <div className="flex items-center justify-between mb-4 border-b pb-3">
+              <h3 className="text-lg font-bold text-gray-950 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-blue-600" />
+                {t('dashboard.remarkFrom', { name: activeMessage.userName })}
+              </h3>
+              <button
+                onClick={() => setActiveMessage(null)}
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-gray-50/70 rounded-xl p-4 text-gray-700 text-sm whitespace-pre-wrap break-words min-h-[100px] border border-gray-100 leading-relaxed">
+              {activeMessage.message}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setActiveMessage(null)}
+                className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl shadow transition"
+              >
+                {t('common.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
+// Grid template shared between header and rows so columns stay aligned.
+// Message column is the only flexible one (minmax 160px → 2fr) because
+// safe / unreported rows leave it empty and need_help rows benefit from
+// the extra width when phone / dept don't need it.
+const GRID_COLS = '100px minmax(120px,1fr) minmax(120px,1fr) 100px 120px 140px minmax(160px,2fr)'
+
 function ListHeader({ t }: { t: (key: string) => string }) {
   return (
-    <div className="grid grid-cols-[100px_minmax(120px,1fr)_minmax(120px,1fr)_100px_120px_140px] gap-3 px-4 py-3 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 border-b">
+    <div
+      className="grid gap-3 px-4 py-3 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 border-b"
+      style={{ gridTemplateColumns: GRID_COLS }}
+    >
       <div>ID</div>
       <div>{t('user.name')}</div>
       <div>{t('user.department')}</div>
       <div>{t('user.facility')}</div>
       <div>{t('common.status')}</div>
       <div>{t('user.phone')}</div>
+      <div>{t('dashboard.note')}</div>
     </div>
   )
+}
+
+function formatPhone(phone: string | null): string {
+  if (!phone) return ''
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('8869')) {
+    return `09${digits.slice(3, 7)}-${digits.slice(7, 10)}-${digits.slice(10)}`
+  }
+  if (digits.length === 10 && digits.startsWith('09')) {
+    return `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`
+  }
+  return phone
 }
 
 function ReportRow({
   index,
   style,
   reports,
-}: RowComponentProps<{ reports: SafetyReport[] }>) {
+  onShowMessage,
+}: RowComponentProps<{ reports: SafetyReport[]; onShowMessage: (userName: string, message: string) => void }>) {
   const r = reports[index]
   if (!r) return null
-  const bg = r.status === 'need_help'
-    ? 'bg-red-50'
-    : r.status === null
-      ? 'bg-yellow-50'
-      : ''
+  const bg = r.status === 'need_help' ? 'bg-red-50' : r.status === null ? 'bg-yellow-50' : ''
+  // Native title attribute gives a hover tooltip with the full message —
+  // keeps the row height fixed (react-window requires constant ROW_HEIGHT)
+  // while still letting the employee read longer messages on demand.
+  // Clicking the message cell will open a gorgeous details Modal.
   return (
     <div
-      style={style}
-      className={`grid grid-cols-[100px_minmax(120px,1fr)_minmax(120px,1fr)_100px_120px_140px] gap-3 px-4 items-center border-b border-gray-100 ${bg}`}
+      style={{ ...style, gridTemplateColumns: GRID_COLS }}
+      className={`grid gap-3 px-4 items-center border-b border-gray-100 ${bg}`}
     >
       <div className="text-sm font-mono truncate">{r.employee_id}</div>
       <div className="font-medium truncate">{r.user_name}</div>
       <div className="text-sm truncate">{r.department}</div>
       <div className="text-sm truncate">{r.facility}</div>
-      <div><StatusBadge status={r.status} /></div>
-      <div className="text-sm text-gray-500 truncate">{r.phone}</div>
+      <div>
+        <StatusBadge status={r.status} />
+      </div>
+      <div className="text-sm text-gray-500 truncate">{formatPhone(r.phone)}</div>
+      <div
+        className={`text-sm truncate ${r.message ? 'cursor-pointer hover:underline' : ''} ${
+          r.status === 'need_help' ? 'text-red-700 font-medium' : 'text-gray-500'
+        }`}
+        title={r.message || undefined}
+        onClick={() => r.message && onShowMessage(r.user_name, r.message)}
+      >
+        {r.message || ''}
+      </div>
     </div>
   )
 }
-

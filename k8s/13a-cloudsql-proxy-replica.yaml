@@ -1,0 +1,70 @@
+# Cloud SQL Auth Proxy — standalone Deployment in front of Cloud SQL Read Replica.
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudsql-proxy-replica
+  namespace: safety-system
+spec:
+  selector:
+    app: cloudsql-proxy-replica
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudsql-proxy-replica
+  namespace: safety-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudsql-proxy-replica
+  template:
+    metadata:
+      labels:
+        app: cloudsql-proxy-replica
+    spec:
+      serviceAccountName: cloudsql-proxy-sa # Reuse the existing SA which already has IAM bindings
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: cloudsql-proxy-replica
+      containers:
+        - name: cloud-sql-proxy-replica
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
+          args:
+            - "--structured-logs"
+            - "--address=0.0.0.0"
+            - "--port=5432"
+            - "--private-ip"
+            - "avid-vine-496920-n4:asia-east1:safety-db-replica" # Hardcoded replica connection name
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true

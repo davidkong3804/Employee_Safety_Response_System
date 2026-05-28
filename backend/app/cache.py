@@ -23,6 +23,7 @@ Design notes
   calls reuse it. The connection is module-global so it lives for the
   process lifetime (lots of short-lived requests share one TCP socket).
 """
+
 from __future__ import annotations
 
 import json
@@ -81,13 +82,22 @@ async def cache_get_json(key: str) -> Optional[Any]:
         raw = await _get_client().get(key)
     except Exception as exc:
         log.debug("cache_get_json(%s) failed: %s", key, exc)
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="miss").inc()
         return None
     if raw is None:
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="miss").inc()
         return None
     try:
-        return json.loads(raw)
+        val = json.loads(raw)
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="hit").inc()
+        return val
     except json.JSONDecodeError:
         # Corrupt cache entry — pretend it's a miss so the caller refetches.
+        from app.metrics import CACHE_OPERATIONS
+        CACHE_OPERATIONS.labels(op="miss").inc()
         return None
 
 
@@ -120,6 +130,20 @@ async def cache_invalidate_pattern(pattern: str) -> None:
             await client.delete(key)
     except Exception as exc:
         log.debug("cache_invalidate_pattern(%s) failed: %s", pattern, exc)
+
+
+async def cache_delete(key: str) -> None:
+    """Delete a specific key from the cache.
+
+    Faster and more efficient than scan-based invalidation when we know the exact key.
+    Failures are silently ignored.
+    """
+    if _DISABLED:
+        return
+    try:
+        await _get_client().delete(key)
+    except Exception as exc:
+        log.debug("cache_delete(%s) failed: %s", key, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +201,26 @@ async def buffer_report(
         return False
 
 
+async def get_buffered_report(event_id: str, user_id: str) -> dict | None:
+    """Read one buffered report without consuming it.
+
+    Called by get_my_report so a read immediately after a buffered write
+    returns the not-yet-flushed status instead of the stale DB null.
+    """
+    if _DISABLED:
+        return None
+    try:
+        client = _get_client()
+        buf_key = f"buf:report:{event_id}:{user_id}"
+        data = await client.hgetall(buf_key)
+        if data and data.get("status"):
+            return data
+        return None
+    except Exception as exc:
+        log.debug("get_buffered_report(%s/%s) failed: %s", event_id, user_id, exc)
+        return None
+
+
 async def drain_event_buffer(event_id: str) -> int:
     """Drain all buffered reports for *event_id* into PostgreSQL.
 
@@ -204,12 +248,6 @@ async def drain_event_buffer(event_id: str) -> int:
             pipe.hgetall(f"buf:report:{event_id}:{uid}")
         raw_results = await pipe.execute()
 
-        # Delete the buf keys we just read.
-        del_pipe = client.pipeline()
-        for uid in user_id_list:
-            del_pipe.delete(f"buf:report:{event_id}:{uid}")
-        await del_pipe.execute()
-
         records = [
             {
                 "user_id": uid,
@@ -224,7 +262,22 @@ async def drain_event_buffer(event_id: str) -> int:
         if not records:
             return 0
 
+        # Write to DB FIRST, then clear the buffer. The earlier order (delete
+        # buffer, then UPDATE) opened a read-after-drain window: between the
+        # delete and the commit, get_my_report saw buffered=None AND DB
+        # status=NULL, so the employee's "報告已回報" UI flipped back to the
+        # "回報狀態" buttons mid-drain. By delaying the buf:report:* deletes
+        # until after the DB commit, get_my_report's overlay still finds the
+        # buffered value (which matches what we just wrote to DB) — no
+        # null-window flicker.
         count = await _batch_update_db(event_id, records)
+
+        # Now safe to clear the per-user buf keys we just drained.
+        del_pipe = client.pipeline()
+        for uid in user_id_list:
+            del_pipe.delete(f"buf:report:{event_id}:{uid}")
+        await del_pipe.execute()
+
         # Invalidate stats cache once per drain cycle, not once per report.
         await cache_invalidate_pattern(f"stats:event:{event_id}:*")
         return count
@@ -286,4 +339,4 @@ async def _batch_update_db(event_id: str, records: list[dict]) -> int:
     async with async_session() as session:
         result = await session.execute(sql, params)
         await session.commit()
-        return result.rowcount or len(records)
+        return result.rowcount if result.rowcount is not None else 0
