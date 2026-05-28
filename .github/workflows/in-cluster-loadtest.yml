@@ -1,0 +1,196 @@
+name: In-Cluster Load Test → GKE
+
+# Drive the in-cluster Locust deployment headlessly from a workflow.
+# Mechanics:
+#   1. Ensure locust-master + locust-worker are deployed (k8s/20-locust.yaml).
+#   2. `kubectl exec` into the master pod to run Locust headless with the
+#      requested user count and duration. Workers connect over the existing
+#      Service so the request volume scales with worker replicas.
+#   3. Copy the resulting CSV + HTML report out of the master pod to the
+#      runner, then upload as an artifact.
+#
+# Why kubectl exec instead of editing the master's args?
+#   The master Deployment runs `--master` (no --headless), serving the
+#   Web UI for interactive use. Patching the args for every load test
+#   would trigger a full rollout (workers reconnect, ramp restarts).
+#   Exec'ing a second Locust process inside the master pod re-uses the
+#   established master/worker mesh and writes the report to /tmp.
+#
+# Triggers
+# --------
+# workflow_dispatch only — load tests are an explicit decision.
+
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: 'Total virtual users (spread across all worker pods)'
+        required: true
+        default: '500'
+      spawn_rate:
+        description: 'Users spawned per second (use 10-50 for clean ramp)'
+        required: true
+        default: '10'
+      duration:
+        description: 'Test duration (e.g. 2m, 5m, 10m)'
+        required: true
+        default: '5m'
+      worker_replicas:
+        description: 'Locust worker pods (more workers ≈ more RPS ceiling). Each worker ≈ 1000 RPS.'
+        required: true
+        default: '10'
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NAMESPACE: safety-system
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: safety-response
+          location: asia-east1-a
+
+      # ---------------------------------------------------------------
+      # Step 1: make sure Locust is deployed and at the requested scale.
+      # Don't apply the manifest from this workflow (avoids surprising
+      # the operator with image-tag changes); just verify presence.
+      # ---------------------------------------------------------------
+      - name: Verify Locust deployment exists
+        run: |
+          if ! kubectl -n "$NAMESPACE" get deployment locust-master >/dev/null 2>&1; then
+            echo "::error::locust-master not found. Run K8s Ops → apply-all first."
+            exit 1
+          fi
+          if ! kubectl -n "$NAMESPACE" get deployment locust-worker >/dev/null 2>&1; then
+            echo "::error::locust-worker not found. Run K8s Ops → apply-all first."
+            exit 1
+          fi
+          kubectl -n "$NAMESPACE" get deploy locust-master locust-worker
+
+      - name: Scale workers to ${{ inputs.worker_replicas }}
+        run: |
+          kubectl -n "$NAMESPACE" scale deployment/locust-worker \
+            --replicas=${{ inputs.worker_replicas }}
+          kubectl -n "$NAMESPACE" rollout status deployment/locust-worker \
+            --timeout=300s
+
+      - name: Wait for all workers to register with master
+        run: |
+          # Locust master logs "Worker '...' reported as ready" lines on
+          # connect. Wait until count matches the desired worker_replicas.
+          MASTER_POD=$(kubectl -n "$NAMESPACE" get pod -l app=locust,role=master \
+            -o jsonpath='{.items[0].metadata.name}')
+          echo "Master pod: $MASTER_POD"
+
+          DESIRED=${{ inputs.worker_replicas }}
+          for i in {1..30}; do
+            READY=$(kubectl -n "$NAMESPACE" logs "$MASTER_POD" --tail=200 2>/dev/null \
+              | grep -c "reported as ready" || true)
+            echo "[$i/30] workers ready: $READY / $DESIRED"
+            if [ "$READY" -ge "$DESIRED" ]; then
+              echo "✅ All workers connected"
+              break
+            fi
+            sleep 5
+          done
+
+      # ---------------------------------------------------------------
+      # Step 2: launch the headless test inside the master pod.
+      # The master process is already running in --master mode; we kick
+      # off the test via the Web UI HTTP endpoint instead of running a
+      # second locust process (cleaner — uses the live worker mesh).
+      # ---------------------------------------------------------------
+      - name: Start headless run via master HTTP endpoint
+        id: run
+        run: |
+          MASTER_POD=$(kubectl -n "$NAMESPACE" get pod -l app=locust,role=master \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          # Locust 2.x: POST /swarm with form data starts the run; --headless
+          # is for CLI-driven runs. We hit the Web UI endpoint instead.
+          DURATION_SEC=$(echo "${{ inputs.duration }}" | sed 's/m/*60/;s/s//' | bc)
+          echo "Run params: users=${{ inputs.users }} spawn=${{ inputs.spawn_rate }} duration=${DURATION_SEC}s"
+
+          kubectl -n "$NAMESPACE" exec "$MASTER_POD" -- \
+            curl -fsS -X POST http://localhost:8089/swarm \
+              --data "user_count=${{ inputs.users }}" \
+              --data "spawn_rate=${{ inputs.spawn_rate }}" \
+              --data "run_time=${DURATION_SEC}s"
+
+          echo "DURATION_SEC=$DURATION_SEC" >> $GITHUB_ENV
+
+      - name: Wait for test to finish
+        run: |
+          # Test ends DURATION_SEC + 30 s ramp-down buffer after start.
+          TOTAL=$(( ${DURATION_SEC} + 30 ))
+          echo "Sleeping ${TOTAL}s while load test runs..."
+          sleep ${TOTAL}
+
+      # ---------------------------------------------------------------
+      # Step 3: collect CSV + HTML and upload as artifact.
+      # Locust master writes reports to its working directory when the
+      # Web UI's "Download Data" tab is used — we hit the HTTP endpoints
+      # to render them.
+      # ---------------------------------------------------------------
+      - name: Fetch reports from master
+        run: |
+          mkdir -p reports
+          MASTER_POD=$(kubectl -n "$NAMESPACE" get pod -l app=locust,role=master \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          for f in stats requests failures exceptions; do
+            kubectl -n "$NAMESPACE" exec "$MASTER_POD" -- \
+              curl -fsS "http://localhost:8089/stats/${f}/csv" \
+              > "reports/loadtest_${f}.csv" 2>/dev/null || true
+          done
+
+          # HTML report
+          kubectl -n "$NAMESPACE" exec "$MASTER_POD" -- \
+            curl -fsS "http://localhost:8089/stats/report?download=1" \
+            > reports/loadtest.html 2>/dev/null || true
+
+          ls -la reports/
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: in-cluster-locust-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 30
+
+      - name: Print summary
+        if: always()
+        run: |
+          {
+            echo "## In-Cluster Load Test"
+            echo "- Users: ${{ inputs.users }}"
+            echo "- Spawn rate: ${{ inputs.spawn_rate }}"
+            echo "- Duration: ${{ inputs.duration }}"
+            echo "- Worker pods: ${{ inputs.worker_replicas }}"
+          } >> $GITHUB_STEP_SUMMARY
+
+          if [ -f reports/loadtest_stats.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Aggregated stats" >> $GITHUB_STEP_SUMMARY
+            echo '```csv' >> $GITHUB_STEP_SUMMARY
+            head -1 reports/loadtest_stats.csv >> $GITHUB_STEP_SUMMARY
+            grep ',Aggregated,' reports/loadtest_stats.csv >> $GITHUB_STEP_SUMMARY || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Reset workers to baseline (2 replicas)
+        if: always()
+        run: |
+          # Don't leave 10 workers running idle — costs node CPU.
+          kubectl -n "$NAMESPACE" scale deployment/locust-worker --replicas=2 || true
