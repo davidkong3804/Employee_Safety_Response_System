@@ -28,7 +28,7 @@ data:
   # backend pods × 15 (pool+overflow) = 750+ client conns per bouncer pod
   # if traffic is uneven; 2000 absorbs that without `cl_waiting` queueing.
   PGBOUNCER_MAX_CLIENT_CONN: "2000"
-  PGBOUNCER_DEFAULT_POOL_SIZE: "50"
+  PGBOUNCER_DEFAULT_POOL_SIZE: "100"
   PGBOUNCER_MIN_POOL_SIZE: "5"
   PGBOUNCER_RESERVE_POOL_SIZE: "10"
   PGBOUNCER_RESERVE_POOL_TIMEOUT: "5"
