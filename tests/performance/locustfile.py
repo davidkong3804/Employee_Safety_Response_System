@@ -74,6 +74,15 @@ def warmup_tokens(environment, **kwargs) -> None:
         debug_f.write(f"environment.runner: {type(environment.runner).__name__ if environment.runner else 'None'}\n")
 
     try:
+        # Skip if tokens already warmed (e.g. second swarm on same master)
+        if _token_pool:
+            with open("/tmp/warmup.log", "a") as debug_f:
+                debug_f.write(f"Skipping warmup — pool already has {len(_token_pool)} tokens\n")
+            print(f"[warmup] skipping — pool already has {len(_token_pool)} tokens")
+            if isinstance(environment.runner, MasterRunner):
+                environment.runner.send_message("warmup_tokens", _token_pool)
+            return
+
         host = (environment.host or "").rstrip("/")
         if not host:
             with open("/tmp/warmup.log", "a") as debug_f:
