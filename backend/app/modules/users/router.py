@@ -5,14 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import cache_delete
-from app.database import get_db
+from app.cache import cache_delete, cache_get_json, cache_invalidate_pattern, cache_set_json
+from app.database import get_db, get_read_db
 from app.dependencies import require_role
 from app.modules.auth.router import hash_password
 from app.modules.users.models import User
 from app.modules.users.schemas import UserCreate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+_USERS_LIST_TTL = 10  # seconds — the user roster changes rarely; absorbs admin-dashboard read bursts
 
 
 def _user_to_response(user: User) -> UserResponse:
@@ -35,9 +37,18 @@ async def list_users(
     role: str | None = None,
     facility: str | None = None,
     department: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User = Depends(require_role("admin", "manager")),
 ):
+    # The admin User Management view (and the load test's AdminUser task) lists
+    # up to ~15k rows per call. Cache by filter combo so repeated reads under
+    # load skip both the heavy SELECT and the response serialisation. The read
+    # goes to the replica; any create/update/delete below invalidates the set.
+    cache_key = f"users:list:{role or '_'}:{facility or '_'}:{department or '_'}"
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return [UserResponse(**item) for item in cached]
+
     query = select(User).order_by(User.employee_id)
     if role:
         query = query.where(User.role == role)
@@ -46,7 +57,9 @@ async def list_users(
     if department:
         query = query.where(User.department == department)
     result = await db.execute(query)
-    return [_user_to_response(u) for u in result.scalars().all()]
+    users = [_user_to_response(u) for u in result.scalars().all()]
+    await cache_set_json(cache_key, [u.model_dump() for u in users], ttl_seconds=_USERS_LIST_TTL)
+    return users
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -72,6 +85,7 @@ async def create_user(
     except IntegrityError:
         raise HTTPException(status_code=409, detail="Employee ID or email already exists")
     await db.refresh(user)
+    await cache_invalidate_pattern("users:list:*")
     return _user_to_response(user)
 
 
@@ -96,6 +110,7 @@ async def update_user(
     await db.flush()
     await db.refresh(user)
     await cache_delete(f"user:profile:{user_id}")
+    await cache_invalidate_pattern("users:list:*")
     return _user_to_response(user)
 
 
@@ -112,3 +127,4 @@ async def delete_user(
     user.is_active = False
     await db.flush()
     await cache_delete(f"user:profile:{user_id}")
+    await cache_invalidate_pattern("users:list:*")

@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import cache_get_json, cache_invalidate_pattern, cache_set_json
-from app.database import get_db
+from app.database import get_db, get_read_db
 from app.dependencies import get_optional_user, require_role
 from app.modules.events.models import Event
 from app.modules.events.schemas import EventCreate, EventResponse, EventUpdate
@@ -39,7 +39,7 @@ def _event_to_response(event: Event) -> EventResponse:
 
 @router.get("", response_model=list[EventResponse])
 async def list_events(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_read_db),
     current_user: User | None = Depends(get_optional_user),
 ):
     # Employee results are facility-scoped; admin/manager see everything.
@@ -66,7 +66,7 @@ async def list_events(
 
 
 @router.get("/{event_id}", response_model=EventResponse)
-async def get_event(event_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_event(event_id: UUID, db: AsyncSession = Depends(get_read_db)):
     result = await db.execute(select(Event).where(Event.id == event_id))
     event = result.scalar_one_or_none()
     if not event:
