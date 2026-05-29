@@ -128,7 +128,7 @@ metadata:
   name: locust-worker
   namespace: safety-system
 spec:
-  replicas: 10
+  replicas: 30
   selector:
     matchLabels:
       app: locust
