@@ -48,8 +48,6 @@ export default function ReminderModal({ reminders, onClose }: Readonly<Props>) {
     >
       <div
         className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-2xl border-t-8 border-red-600 animate-[fadeIn_0.2s_ease-out]"
-        role="dialog"
-        aria-modal="true"
       >
         <style>{`
           @keyframes fadeIn {

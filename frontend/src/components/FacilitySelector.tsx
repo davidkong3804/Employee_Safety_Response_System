@@ -130,12 +130,10 @@ export default function FacilitySelector({ value, onChange }: Readonly<Props>) {
         return (
           <div key={country.key} className="border-b last:border-0">
             {/* Country row */}
-            <div
-              className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 cursor-pointer select-none"
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 cursor-pointer select-none text-left focus:outline-none"
               onClick={() => toggle(country.key)}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(country.key); } }}
             >
               {countryOpen
                 ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
@@ -151,7 +149,7 @@ export default function FacilitySelector({ value, onChange }: Readonly<Props>) {
               <span className="text-xs text-gray-400 ml-1.5">
                 {t('facility.fabsCount', { count: countryFabs.length })}
               </span>
-            </div>
+            </button>
 
             {countryOpen && country.regions.map(region => {
               const allRegion = isAll || region.fabs.every(f => value.includes(f))
@@ -162,12 +160,10 @@ export default function FacilitySelector({ value, onChange }: Readonly<Props>) {
               return (
                 <div key={region.key} className="ml-7 border-t border-gray-100">
                   {/* Region row */}
-                  <div
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/70 hover:bg-gray-100 cursor-pointer select-none"
-                    role="button"
-                    tabIndex={0}
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-1.5 bg-gray-50/70 hover:bg-gray-100 cursor-pointer select-none text-left focus:outline-none"
                     onClick={() => toggle(regionKey)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(regionKey); } }}
                   >
                     {regionOpen
                       ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
@@ -181,7 +177,7 @@ export default function FacilitySelector({ value, onChange }: Readonly<Props>) {
                     />
                     <span className="text-gray-700">{t(`facility.${region.key}`)}</span>
                     <span className="text-xs text-gray-400 ml-1.5">{region.fabs.join(', ')}</span>
-                  </div>
+                  </button>
 
                   {/* Individual fabs */}
                   {regionOpen && (
