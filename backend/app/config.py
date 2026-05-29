@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
+    DATABASE_URL: str | None = None
     READ_DATABASE_URL: str | None = None
     REDIS_URL: str = "redis://localhost:6379"
     JWT_SECRET: str = "dev-secret-key-change-in-production"
