@@ -375,7 +375,7 @@ export default function Dashboard() {
 // the extra width when phone / dept don't need it.
 const GRID_COLS = '100px minmax(120px,1fr) minmax(120px,1fr) 100px 120px 140px minmax(160px,2fr)'
 
-function ListHeader({ t }: { t: (key: string) => string }) {
+function ListHeader({ t }: Readonly<{ t: (key: string) => string }>) {
   return (
     <div
       className="grid gap-3 px-4 py-3 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 border-b"
@@ -412,7 +412,17 @@ function ReportRow({
 }: RowComponentProps<{ reports: SafetyReport[]; onShowMessage: (userName: string, message: string) => void }>) {
   const r = reports[index]
   if (!r) return null
-  const bg = r.status === 'need_help' ? 'bg-red-50' : r.status === null ? 'bg-yellow-50' : ''
+
+  let bg = ''
+  if (r.status === 'need_help') {
+    bg = 'bg-red-50'
+  } else if (r.status === null) {
+    bg = 'bg-yellow-50'
+  }
+
+  const messageText = r.message ?? ''
+  const hasMessage = !!r.message
+
   // Native title attribute gives a hover tooltip with the full message —
   // keeps the row height fixed (react-window requires constant ROW_HEIGHT)
   // while still letting the employee read longer messages on demand.
@@ -430,14 +440,21 @@ function ReportRow({
         <StatusBadge status={r.status} />
       </div>
       <div className="text-sm text-gray-500 truncate">{formatPhone(r.phone)}</div>
-      <div
-        className={`text-sm truncate ${r.message ? 'cursor-pointer hover:underline' : ''} ${
-          r.status === 'need_help' ? 'text-red-700 font-medium' : 'text-gray-500'
-        }`}
-        title={r.message || undefined}
-        onClick={() => r.message && onShowMessage(r.user_name, r.message)}
-      >
-        {r.message || ''}
+      <div className="text-sm truncate">
+        {hasMessage ? (
+          <button
+            type="button"
+            className={`text-left truncate w-full hover:underline focus:outline-none ${
+              r.status === 'need_help' ? 'text-red-700 font-medium' : 'text-gray-500'
+            }`}
+            title={r.message ?? undefined}
+            onClick={() => onShowMessage(r.user_name, r.message!)}
+          >
+            {messageText}
+          </button>
+        ) : (
+          <span className="text-gray-500">{messageText}</span>
+        )}
       </div>
     </div>
   )

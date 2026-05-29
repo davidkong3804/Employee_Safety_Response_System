@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void
 }
 
-export default function ReminderModal({ reminders, onClose }: Props) {
+export default function ReminderModal({ reminders, onClose }: Readonly<Props>) {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
@@ -25,16 +25,31 @@ export default function ReminderModal({ reminders, onClose }: Props) {
     navigate(`/events/${first.event_id}/report`)
   }
 
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+
+  const handleOverlayKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+      onClose()
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      aria-label="Close modal overlay"
+      onClick={handleOverlayClick}
+      onKeyDown={handleOverlayKeyDown}
     >
       <div
         className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-2xl border-t-8 border-red-600 animate-[fadeIn_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         <style>{`
           @keyframes fadeIn {

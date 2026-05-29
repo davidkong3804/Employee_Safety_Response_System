@@ -32,19 +32,45 @@ interface Props {
   onChange: (fabs: string[]) => void
 }
 
+interface FabCheckboxProps {
+  fab: string
+  checked: boolean
+  disabled: boolean
+  onChange: (fab: string) => void
+}
+
+function FabCheckbox({ fab, checked, disabled, onChange }: Readonly<FabCheckboxProps>) {
+  return (
+    <label
+      className={`flex items-center gap-2 px-3 py-1 rounded ${
+        disabled ? 'cursor-not-allowed opacity-70' : 'hover:bg-gray-50 cursor-pointer'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={() => onChange(fab)}
+        className="w-4 h-4 accent-blue-900 shrink-0 disabled:cursor-not-allowed"
+      />
+      <span className="font-mono">{fab}</span>
+    </label>
+  )
+}
+
 function Checkbox({
   checked,
   indeterminate = false,
   disabled = false,
   onChange,
   onClick,
-}: {
+}: Readonly<{
   checked: boolean
   indeterminate?: boolean
   disabled?: boolean
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onClick?: (e: React.MouseEvent<HTMLInputElement>) => void
-}) {
+}>) {
   const ref = useRef<HTMLInputElement>(null)
   if (ref.current) ref.current.indeterminate = indeterminate
   return (
@@ -60,7 +86,7 @@ function Checkbox({
   )
 }
 
-export default function FacilitySelector({ value, onChange }: Props) {
+export default function FacilitySelector({ value, onChange }: Readonly<Props>) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
@@ -106,7 +132,10 @@ export default function FacilitySelector({ value, onChange }: Props) {
             {/* Country row */}
             <div
               className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 cursor-pointer select-none"
+              role="button"
+              tabIndex={0}
               onClick={() => toggle(country.key)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(country.key); } }}
             >
               {countryOpen
                 ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
@@ -135,7 +164,10 @@ export default function FacilitySelector({ value, onChange }: Props) {
                   {/* Region row */}
                   <div
                     className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/70 hover:bg-gray-100 cursor-pointer select-none"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggle(regionKey)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(regionKey); } }}
                   >
                     {regionOpen
                       ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
@@ -155,21 +187,13 @@ export default function FacilitySelector({ value, onChange }: Props) {
                   {regionOpen && (
                     <div className="ml-6 py-1 border-t border-gray-100">
                       {region.fabs.map(fab => (
-                        <label
+                        <FabCheckbox
                           key={fab}
-                          className={`flex items-center gap-2 px-3 py-1 rounded ${
-                            isAll ? 'cursor-not-allowed opacity-70' : 'hover:bg-gray-50 cursor-pointer'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isAll || value.includes(fab)}
-                            disabled={isAll}
-                            onChange={() => toggleFab(fab)}
-                            className="w-4 h-4 accent-blue-900 shrink-0 disabled:cursor-not-allowed"
-                          />
-                          <span className="font-mono">{fab}</span>
-                        </label>
+                          fab={fab}
+                          checked={isAll || value.includes(fab)}
+                          disabled={isAll}
+                          onChange={toggleFab}
+                        />
                       ))}
                     </div>
                   )}
