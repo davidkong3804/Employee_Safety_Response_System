@@ -31,8 +31,8 @@ import requests
 from locust import HttpUser, between, events, task
 
 # Pre-warm pool size sentinels — see warmup_tokens() for the rationale.
-WARMUP_MAX_TOKENS = 2000        # absolute upper bound (~ Locust GitHub Action runner mem budget)
-WARMUP_PARALLELISM = 50         # concurrent login requests during warmup
+WARMUP_MAX_TOKENS = 15000        # absolute upper bound (~ Locust GitHub Action runner mem budget)
+WARMUP_PARALLELISM = 100         # concurrent login requests during warmup
 WARMUP_OVERFETCH_FACTOR = 2     # warm 2× VU count so random.choice has slack
 
 # ---------------------------------------------------------------------------
