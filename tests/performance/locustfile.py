@@ -67,75 +67,95 @@ _token_pool: dict[str, str] = {}
 
 @events.test_start.add_listener
 def warmup_tokens(environment, **kwargs) -> None:
-    """Pre-fetch JWTs before VUs spawn, so the bcrypt cost doesn't pollute
-    the business-endpoint metrics.
-
-    Two changes from the original implementation:
-      1. **Concurrent fetch**: 500 sequential logins at ~300ms each takes
-         ~150s. ThreadPoolExecutor(50) overlaps requests so the
-         async-bcrypt backend can use multiple threads in parallel.
-      2. **Bounded warmup**: only pre-warm tokens we actually need. A test
-         with N VUs distributes credentials via `random.choice`, so the
-         expected unique-credential count is ≤ N. We warm
-         `WARMUP_OVERFETCH_FACTOR × N` (default 2×) for slack, capped at
-         `WARMUP_MAX_TOKENS`. VUs that draw an unwarmed credential fall
-         through to live login (still cheap with async bcrypt).
-    """
+    import traceback
     with open("/tmp/warmup.log", "a") as debug_f:
         debug_f.write(f"--- warmup_tokens triggered --- \n")
         debug_f.write(f"environment.host: {environment.host}\n")
         debug_f.write(f"environment.runner: {type(environment.runner).__name__ if environment.runner else 'None'}\n")
 
-    host = (environment.host or "").rstrip("/")
-    if not host:
-        with open("/tmp/warmup.log", "a") as debug_f:
-            debug_f.write("skipping due to empty host\n")
-        print("[warmup] no host configured – skipping token pre-fetch")
-        return
-
-    # Derive how many tokens to warm from the planned VU count
-    num_users = 0
     try:
-        num_users = int(getattr(environment.parsed_options, "num_users", 0) or 0)
-    except (AttributeError, TypeError, ValueError):
+        host = (environment.host or "").rstrip("/")
+        if not host:
+            with open("/tmp/warmup.log", "a") as debug_f:
+                debug_f.write("skipping due to empty host\n")
+            print("[warmup] no host configured – skipping token pre-fetch")
+            return
+
+        # Derive how many tokens to warm from the planned VU count
         num_users = 0
-    target_employee_count = (
-        min(num_users * WARMUP_OVERFETCH_FACTOR, len(EMPLOYEE_CREDS), WARMUP_MAX_TOKENS)
-        if num_users > 0
-        else min(len(EMPLOYEE_CREDS), WARMUP_MAX_TOKENS)
-    )
-    employees_to_warm = EMPLOYEE_CREDS[:target_employee_count]
-    all_creds = employees_to_warm + MANAGER_CREDS + [ADMIN_CREDS]
-
-    def _login_one(creds: dict) -> Optional[tuple]:
         try:
-            r = requests.post(f"{host}/api/auth/login", json=creds, timeout=30)
-            if r.status_code == 200:
-                return creds["employee_id"], r.json()["access_token"]
-        except requests.RequestException:
+            num_users = int(getattr(environment.parsed_options, "num_users", 0) or 0)
+        except (AttributeError, TypeError, ValueError):
+            num_users = 0
+        
+        with open("/tmp/warmup.log", "a") as debug_f:
+            debug_f.write(f"Derived num_users: {num_users}\n")
+
+        target_employee_count = (
+            min(num_users * WARMUP_OVERFETCH_FACTOR, len(EMPLOYEE_CREDS), WARMUP_MAX_TOKENS)
+            if num_users > 0
+            else min(len(EMPLOYEE_CREDS), WARMUP_MAX_TOKENS)
+        )
+        employees_to_warm = EMPLOYEE_CREDS[:target_employee_count]
+        all_creds = employees_to_warm + MANAGER_CREDS + [ADMIN_CREDS]
+
+        with open("/tmp/warmup.log", "a") as debug_f:
+            debug_f.write(f"Target count to warm: {len(all_creds)}\n")
+
+        def _login_one(creds: dict) -> Optional[tuple]:
+            try:
+                r = requests.post(f"{host}/api/auth/login", json=creds, timeout=30)
+                if r.status_code == 200:
+                    return creds["employee_id"], r.json()["access_token"]
+            except Exception as e:
+                # Log specific requests errors
+                with open("/tmp/warmup.log", "a") as debug_f:
+                    debug_f.write(f"Login request failed for {creds.get('employee_id')}: {str(e)}\n")
+                return None
             return None
-        return None
 
-    ok = 0
-    with ThreadPoolExecutor(max_workers=WARMUP_PARALLELISM) as ex:
-        for result in ex.map(_login_one, all_creds):
-            if result:
-                _token_pool[result[0]] = result[1]
-                ok += 1
-    print(
-        f"[warmup] pre-fetched {ok}/{len(all_creds)} tokens from {host} "
-        f"(num_users={num_users}, parallelism={WARMUP_PARALLELISM})"
-    )
+        ok = 0
+        with open("/tmp/warmup.log", "a") as debug_f:
+            debug_f.write("Starting ThreadPoolExecutor warmup...\n")
+            
+        with ThreadPoolExecutor(max_workers=WARMUP_PARALLELISM) as ex:
+            for result in ex.map(_login_one, all_creds):
+                if result:
+                    _token_pool[result[0]] = result[1]
+                    ok += 1
 
-    if isinstance(environment.runner, MasterRunner):
-        print(f"[warmup] broadcasting {len(_token_pool)} pre-warmed tokens to all workers")
-        environment.runner.send_message("warmup_tokens", _token_pool)
+        with open("/tmp/warmup.log", "a") as debug_f:
+            debug_f.write(f"ThreadPoolExecutor finished. Successfully pre-fetched: {ok}/{len(all_creds)} tokens\n")
+
+        print(
+            f"[warmup] pre-fetched {ok}/{len(all_creds)} tokens from {host} "
+            f"(num_users={num_users}, parallelism={WARMUP_PARALLELISM})"
+        )
+
+        if isinstance(environment.runner, MasterRunner):
+            with open("/tmp/warmup.log", "a") as debug_f:
+                debug_f.write(f"Runner is MasterRunner. Broadcasting {len(_token_pool)} tokens to workers...\n")
+            print(f"[warmup] broadcasting {len(_token_pool)} pre-warmed tokens to all workers")
+            environment.runner.send_message("warmup_tokens", _token_pool)
+            with open("/tmp/warmup.log", "a") as debug_f:
+                debug_f.write("Broadcasting message sent successfully via ZMQ.\n")
+
+    except Exception as e:
+        with open("/tmp/warmup.log", "a") as debug_f:
+            debug_f.write(f"CRITICAL ERROR in warmup_tokens: {str(e)}\n")
+            debug_f.write(traceback.format_exc() + "\n")
 
 
 def on_warmup_tokens(environment, msg, **kwargs):
     global _token_pool
-    _token_pool.update(msg.data)
-    print(f"[worker] received {len(msg.data)} pre-warmed tokens from master")
+    try:
+        _token_pool.update(msg.data)
+        with open("/tmp/warmup_worker.log", "a") as debug_f:
+            debug_f.write(f"Received {len(msg.data)} pre-warmed tokens from master. Current pool size: {len(_token_pool)}\n")
+        print(f"[worker] received {len(msg.data)} pre-warmed tokens from master")
+    except Exception as e:
+        with open("/tmp/warmup_worker.log", "a") as debug_f:
+            debug_f.write(f"ERROR in on_warmup_tokens: {str(e)}\n")
 
 
 @events.init.add_listener
