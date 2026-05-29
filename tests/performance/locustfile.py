@@ -185,6 +185,16 @@ class _BaseUser(HttpUser):
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
 
     def _login(self, creds: dict) -> None:
+        # If distributed stress test is active, wait briefly for master's token pool broadcast.
+        # This resolves the race condition where Workers spawn VUs before Master completes its token warmup.
+        import time
+        retries = 30
+        while not _token_pool and retries > 0:
+            # We only wait if we are running in worker mode (ZMQ communication is active)
+            # and master is pre-warming.
+            time.sleep(1)
+            retries -= 1
+
         # Prefer the token pre-fetched at test_start (see warmup_tokens) so the
         # bcrypt login cost does not pollute the metrics of other endpoints.
         cached = _token_pool.get(creds["employee_id"])
