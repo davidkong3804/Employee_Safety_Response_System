@@ -183,6 +183,10 @@ kubectl apply -f k8s/19-kube-state-metrics.yaml
     全面在 Controller 層使用 Pydantic 進行嚴格列舉限制（例如：`status: Literal["safe", "need_help"]`），在最外層阻斷非法字串傳入資料庫產生 500 錯誤。
 4.  **前端 React 全局 ErrorBoundary**
     在 React SPA 前端部署自訂 `ErrorBoundary` 組件，當單一組件崩潰時會優雅渲染出系統異常提示並引導使用者重新載入，避免出現瀏覽器死白頁面。
+5.  **程式碼健全度與一致性控制 (Code Quality & SonarQube)**
+    *   **靜態分析與指標檢測**：專案已配置 **SonarQube / SonarScanner** 靜態代碼審查體系（定義於根目錄 `sonar-project.properties`），用以客觀評估程式碼可靠性、安全性漏洞與技術債。
+    *   **一鍵自動化掃描**：提供本地端自動化分析腳本 [`./scripts/run-sonar.sh`](file:///Users/kongdewei/Downloads/01_School_Courses/cloud_native_proj/scripts/run-sonar.sh)。它會自動執行測試、產生覆蓋率報告（`coverage.xml` 與 `lcov.info`），並啟動容器化 SonarScanner，將詳細代碼健全度報告呈現在本地 `http://localhost:9000` 面板。
+    *   **程式碼風格強制**：後端使用 `pyproject.toml` (Ruff) 實施嚴格的代碼風格與 import 字母排序約束；前端使用 `eslint.config.js` 與 Prettier 強制執行 TypeScript 類型一致性。
 
 ---
 
@@ -190,7 +194,11 @@ kubectl apply -f k8s/19-kube-state-metrics.yaml
 
 ```
 ├── docker-compose.yml              # 本地 Docker Compose 容器編排
+├── docker-compose.sonar.yml        # [NEW] 本地 SonarQube 伺服器容器編排
+├── sonar-project.properties        # [NEW] SonarQube / SonarScanner 靜態分析配置檔
 ├── k8s/                            # Kubernetes (GKE) 資源清單檔案
+├── scripts/                        # 運維自動化腳本
+│   └── run-sonar.sh                # [NEW] 一鍵自動化執行測試與 SonarQube 代碼分析
 ├── backend/                        # 後端 FastAPI 服務
 │   ├── Dockerfile                  # 生產環境多階段構建 Dockerfile
 │   ├── requirements.txt            # Python 依賴包規格
@@ -219,6 +227,7 @@ kubectl apply -f k8s/19-kube-state-metrics.yaml
 │       ├── components/             # ErrorBoundary, StatusBadge, 保護路由
 │       └── i18n/                   # react-i18next (en.json, zh-TW.json 多語系)
 └── docs/                           # 深度開發與評估文件
+    ├── code-quality-and-sonar-setup.md # [NEW] 程式碼品質與 SonarQube 整合指南 (對齊 NTU 10% 評分項)
     ├── architecture-evaluation-and-optimization.md # 架構評估與優化建議報告
     ├── architecture.md             # 系統架構、技術選型決策說明書
     ├── deployment.md               # Docker Compose 與 GKE 詳細部署手冊

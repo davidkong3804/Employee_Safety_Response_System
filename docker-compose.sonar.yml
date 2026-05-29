@@ -1,0 +1,48 @@
+# ===========================================================================
+# Docker Compose for Local SonarQube Server
+# Enables running static code quality analysis locally on port 9000.
+# ===========================================================================
+version: "3.8"
+
+services:
+  sonarqube:
+    image: sonarqube:10.5.1-community
+    container_name: sonarqube-server
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_JDBC_USERNAME=sonar
+      - SONAR_JDBC_PASSWORD=sonar
+      - SONAR_JDBC_URL=jdbc:postgresql://sonar-db:5432/sonar
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    depends_on:
+      - sonar-db
+    networks:
+      - sonar-network
+    restart: always
+
+  sonar-db:
+    image: postgres:16-alpine
+    container_name: sonarqube-db
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=sonar
+      - POSTGRES_DB=sonar
+    volumes:
+      - sonar_db_data:/var/lib/postgresql/data
+    networks:
+      - sonar-network
+    restart: always
+
+networks:
+  sonar-network:
+    name: sonar-network
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+  sonar_db_data:
