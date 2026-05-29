@@ -81,8 +81,15 @@ def warmup_tokens(environment, **kwargs) -> None:
          `WARMUP_MAX_TOKENS`. VUs that draw an unwarmed credential fall
          through to live login (still cheap with async bcrypt).
     """
+    with open("/tmp/warmup.log", "a") as debug_f:
+        debug_f.write(f"--- warmup_tokens triggered --- \n")
+        debug_f.write(f"environment.host: {environment.host}\n")
+        debug_f.write(f"environment.runner: {type(environment.runner).__name__ if environment.runner else 'None'}\n")
+
     host = (environment.host or "").rstrip("/")
     if not host:
+        with open("/tmp/warmup.log", "a") as debug_f:
+            debug_f.write("skipping due to empty host\n")
         print("[warmup] no host configured – skipping token pre-fetch")
         return
 
