@@ -29,6 +29,7 @@ from typing import Optional
 
 import requests
 from locust import HttpUser, between, events, task
+from locust.runners import MasterRunner, WorkerRunner
 
 # Pre-warm pool size sentinels — see warmup_tokens() for the rationale.
 WARMUP_MAX_TOKENS = 15000        # absolute upper bound (~ Locust GitHub Action runner mem budget)
@@ -118,6 +119,22 @@ def warmup_tokens(environment, **kwargs) -> None:
         f"[warmup] pre-fetched {ok}/{len(all_creds)} tokens from {host} "
         f"(num_users={num_users}, parallelism={WARMUP_PARALLELISM})"
     )
+
+    if isinstance(environment.runner, MasterRunner):
+        print(f"[warmup] broadcasting {len(_token_pool)} pre-warmed tokens to all workers")
+        environment.runner.send_message("warmup_tokens", _token_pool)
+
+
+def on_warmup_tokens(environment, msg, **kwargs):
+    global _token_pool
+    _token_pool.update(msg.data)
+    print(f"[worker] received {len(msg.data)} pre-warmed tokens from master")
+
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    if not isinstance(environment.runner, MasterRunner):
+        environment.runner.register_message("warmup_tokens", on_warmup_tokens)
 
 
 class _BaseUser(HttpUser):
