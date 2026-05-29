@@ -90,6 +90,29 @@ echo -e "*(系統會要求您立即修改密碼，修改完後請至 [My Account
 echo -e "\n${YELLOW}[步驟 3/4] 授權金鑰配置...${NC}"
 read -p "請輸入您的 SonarQube User Token (或直接按 Enter 跳過並使用匿名分析): " SONAR_TOKEN
 
+# 4.5. 修正測試覆蓋率報告路徑以適應容器掛載
+echo -e "\n${YELLOW}[步驟 3.5/4] 自動修復測試覆蓋率路徑對應...${NC}"
+python3 -c '
+import re, os
+# 修正後端路徑
+if os.path.exists("backend/coverage.xml"):
+    with open("backend/coverage.xml", "r") as f:
+        content = f.read()
+    content = re.sub(r"<source>.*backend/app</source>", "<source>/usr/src/backend/app</source>", content)
+    with open("backend/coverage.xml", "w") as f:
+        f.write(content)
+    print("✓ 已自動將 backend/coverage.xml 中的絕對路徑修正為容器內的 /usr/src/backend/app")
+
+# 修正前端路徑
+if os.path.exists("frontend/coverage/lcov.info"):
+    with open("frontend/coverage/lcov.info", "r") as f:
+        content = f.read()
+    content = content.replace("SF:src/", "SF:frontend/src/")
+    with open("frontend/coverage/lcov.info", "w") as f:
+        f.write(content)
+    print("✓ 已自動將 frontend/coverage/lcov.info 中的相對路徑修正為容器內的 frontend/src/")
+'
+
 # 5. 啟動 SonarScanner 容器執行掃描
 echo -e "\n${YELLOW}[步驟 4/4] 啟動 SonarScanner 靜態代碼分析...${NC}"
 echo -e "${CYAN}正在掛載本地目錄並啟動 SonarScanner 進行程式碼審查...${NC}"
