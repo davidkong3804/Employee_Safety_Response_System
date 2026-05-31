@@ -29,7 +29,7 @@
     "update": "更新回報",
     "imSafe": "我是安全的",
     "needHelp": "需要協助",
-    "message": "醫療協助請求（選填）",
+    "message": "是否需要醫療或其餘協助（選填）",
     "submitted": "回報成功！",
     "failed": "回報失敗，請重試",
     "failedNetwork": "網路不穩，請檢查連線後重試",

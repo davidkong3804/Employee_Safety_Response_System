@@ -29,7 +29,7 @@
     "update": "Update Report",
     "imSafe": "I'm Safe",
     "needHelp": "Need Help",
-    "message": "Medical assistance request (optional)",
+    "message": "Need medical or other assistance? (optional)",
     "submitted": "Report submitted!",
     "failed": "Report failed, please retry",
     "failedNetwork": "Connection unstable. Check your network and retry.",
