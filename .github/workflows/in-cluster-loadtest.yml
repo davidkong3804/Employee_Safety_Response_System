@@ -110,24 +110,26 @@ jobs:
       # off the test via the Web UI HTTP endpoint instead of running a
       # second locust process (cleaner — uses the live worker mesh).
       # ---------------------------------------------------------------
-      - name: Start headless run via master HTTP endpoint
+      - name: Start headless run via port-forward
         id: run
         run: |
-          MASTER_POD=$(kubectl -n "$NAMESPACE" get pod -l app=locust,role=master \
-            -o jsonpath='{.items[0].metadata.name}')
+          # Start background port-forward to master service
+          kubectl -n "$NAMESPACE" port-forward svc/locust-master 8089:8089 &
+          PID=$!
+          echo "PORT_FORWARD_PID=$PID" >> $GITHUB_ENV
+          
+          # Allow port-forward to establish
+          sleep 5
 
-          # Locust 2.x: POST /swarm with form data starts the run; --headless
-          # is for CLI-driven runs. We hit the Web UI endpoint instead.
           DURATION_SEC=$(echo "${{ inputs.duration }}" | sed 's/m/*60/;s/s//' | bc)
           echo "Run params: users=${{ inputs.users }} spawn=${{ inputs.spawn_rate }} duration=${DURATION_SEC}s"
-
-          kubectl -n "$NAMESPACE" exec "$MASTER_POD" -- \
-            curl -fsS -X POST http://localhost:8089/swarm \
-              --data "user_count=${{ inputs.users }}" \
-              --data "spawn_rate=${{ inputs.spawn_rate }}" \
-              --data "run_time=${DURATION_SEC}s"
-
           echo "DURATION_SEC=$DURATION_SEC" >> $GITHUB_ENV
+
+          # Trigger the swarm via runner local curl (perfectly safe and guaranteed to have curl)
+          curl -fsS -X POST http://localhost:8089/swarm \
+            --data "user_count=${{ inputs.users }}" \
+            --data "spawn_rate=${{ inputs.spawn_rate }}" \
+            --data "run_time=${DURATION_SEC}s"
 
       - name: Wait for test to finish
         run: |
@@ -138,25 +140,18 @@ jobs:
 
       # ---------------------------------------------------------------
       # Step 3: collect CSV + HTML and upload as artifact.
-      # Locust master writes reports to its working directory when the
-      # Web UI's "Download Data" tab is used — we hit the HTTP endpoints
-      # to render them.
       # ---------------------------------------------------------------
-      - name: Fetch reports from master
+      - name: Fetch reports via port-forward
         run: |
           mkdir -p reports
-          MASTER_POD=$(kubectl -n "$NAMESPACE" get pod -l app=locust,role=master \
-            -o jsonpath='{.items[0].metadata.name}')
 
           for f in stats requests failures exceptions; do
-            kubectl -n "$NAMESPACE" exec "$MASTER_POD" -- \
-              curl -fsS "http://localhost:8089/stats/${f}/csv" \
+            curl -fsS "http://localhost:8089/stats/${f}/csv" \
               > "reports/loadtest_${f}.csv" 2>/dev/null || true
           done
 
           # HTML report
-          kubectl -n "$NAMESPACE" exec "$MASTER_POD" -- \
-            curl -fsS "http://localhost:8089/stats/report?download=1" \
+          curl -fsS "http://localhost:8089/stats/report?download=1" \
             > reports/loadtest.html 2>/dev/null || true
 
           ls -la reports/
@@ -189,8 +184,13 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Reset workers to baseline (2 replicas)
+      - name: Stop port-forward and reset workers
         if: always()
         run: |
-          # Don't leave 10 workers running idle — costs node CPU.
+          # Kill background port-forward process
+          if [ -n "$PORT_FORWARD_PID" ]; then
+            echo "Stopping port-forward (PID: $PORT_FORWARD_PID)..."
+            kill $PORT_FORWARD_PID || true
+          fi
+          # Don't leave workers running idle — costs node CPU.
           kubectl -n "$NAMESPACE" scale deployment/locust-worker --replicas=2 || true
