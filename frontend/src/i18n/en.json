@@ -3,7 +3,8 @@
     "actions": "Actions",
     "status": "Status",
     "retry": "Retry",
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel"
   },
   "app": {
     "title": "Safety Response System",
@@ -38,7 +39,10 @@
     "failedAmbiguous": "Submission error. Return to home to confirm your status.",
     "alreadyReported": "You have already reported",
     "status": "Your Status",
-    "updateHint": "Want to update? Tap again."
+    "updateHint": "Want to update? Tap again.",
+    "confirmHelpTitle": "Confirm you need help?",
+    "confirmHelpBody": "This will immediately alert your manager. Only confirm if you genuinely need assistance.",
+    "confirmHelpConfirm": "Yes, I need help"
   },
   "status": {
     "safe": "Safe",

@@ -96,17 +96,38 @@ describe('ReportPage', () => {
       expect(toast.success).toHaveBeenCalledWith('Report submitted!')
     })
 
-    it('clicking "Need Help" submits status=need_help', async () => {
+    // FEATURE-2: Need Help is guarded by a confirmation step (防呆).
+    it('clicking "Need Help" opens a confirmation and does NOT submit yet', async () => {
+      renderPage()
+      await waitFor(() => screen.getByText('Need Help'))
+      fireEvent.click(screen.getByText('Need Help'))
+      expect(await screen.findByText('Confirm you need help?')).toBeInTheDocument()
+      expect(mockedSubmitReport).not.toHaveBeenCalled()
+    })
+
+    it('confirming the Need Help dialog submits status=need_help', async () => {
       mockedSubmitReport.mockResolvedValue({ ...reportedSafe, status: 'need_help' })
       renderPage()
       await waitFor(() => screen.getByText('Need Help'))
       fireEvent.click(screen.getByText('Need Help'))
+      fireEvent.click(await screen.findByText('Yes, I need help'))
       await waitFor(() =>
         expect(mockedSubmitReport).toHaveBeenCalledWith('ev-1', {
           status: 'need_help',
           message: undefined,
         }),
       )
+    })
+
+    it('cancelling the Need Help dialog aborts without submitting', async () => {
+      renderPage()
+      await waitFor(() => screen.getByText('Need Help'))
+      fireEvent.click(screen.getByText('Need Help'))
+      fireEvent.click(await screen.findByText('Cancel'))
+      await waitFor(() =>
+        expect(screen.queryByText('Confirm you need help?')).not.toBeInTheDocument(),
+      )
+      expect(mockedSubmitReport).not.toHaveBeenCalled()
     })
 
     it('forwards the typed message with the submission', async () => {
@@ -160,11 +181,19 @@ describe('ReportPage', () => {
       await waitFor(() => expect(screen.getByText('all clear')).toBeInTheDocument())
     })
 
+    // FEATURE-1: report content surfaces the employee id + timestamp.
+    it('shows the employee id and report timestamp', async () => {
+      renderPage()
+      await waitFor(() => screen.getByText('You have already reported'))
+      expect(screen.getByText(/E001/)).toBeInTheDocument()
+    })
+
     it('lets the employee submit a status update from the already-reported view', async () => {
       mockedSubmitReport.mockResolvedValue({ ...reportedSafe, status: 'need_help' })
       renderPage()
       await waitFor(() => screen.getByText('You have already reported'))
       fireEvent.click(screen.getByText('Need Help'))
+      fireEvent.click(await screen.findByText('Yes, I need help'))
       await waitFor(() =>
         expect(mockedSubmitReport).toHaveBeenCalledWith('ev-1', {
           status: 'need_help',

@@ -57,8 +57,16 @@ export default function Dashboard() {
     listEvents()
       .then((evts) => {
         setEvents(evts)
-        const active = evts.find((e) => e.status === 'active')
-        if (active) setSelectedEventId(active.id)
+        // Prefer an active event, but fall back to the most-recent event so the
+        // dashboard still renders when nothing is currently active. Without this
+        // fallback `selectedEventId` stayed '' whenever no event was active →
+        // `reloadAll` early-returned → blank dashboard ("死白一片"), while the
+        // controlled <select value=""> misleadingly showed the first <option>
+        // (a value that matches no option falls back to the first one in the DOM).
+        // The events list is ordered active-first then most-recent, so evts[0]
+        // is the natural default. (BUG-0)
+        const initial = evts.find((e) => e.status === 'active') ?? evts[0]
+        if (initial) setSelectedEventId(initial.id)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -154,13 +162,20 @@ export default function Dashboard() {
     )
   }
 
-  const pieData = stats
+  // FEATURE-3: each slice carries its status so clicking it filters the
+  // employee list to that category (toggle off by clicking the active slice).
+  const pieData: { name: string; value: number; color: string; status: StatusFilter }[] = stats
     ? [
-        { name: t('status.safe'), value: stats.safe, color: COLORS.safe },
-        { name: t('status.need_help'), value: stats.need_help, color: COLORS.need_help },
-        { name: t('status.unreported'), value: stats.unreported, color: COLORS.unreported },
+        { name: t('status.safe'), value: stats.safe, color: COLORS.safe, status: 'safe' },
+        { name: t('status.need_help'), value: stats.need_help, color: COLORS.need_help, status: 'need_help' },
+        { name: t('status.unreported'), value: stats.unreported, color: COLORS.unreported, status: 'unreported' },
       ]
     : []
+
+  const handleSliceClick = (status: StatusFilter) => {
+    if (!status) return
+    setFilterStatus((cur) => (cur === status ? '' : status))
+  }
 
   const barData = deptStats.map((d) => ({
     name: d.department,
@@ -238,9 +253,17 @@ export default function Dashboard() {
                 paddingAngle={3}
                 dataKey="value"
                 label={({ name, value }) => `${name}: ${value}`}
+                cursor="pointer"
+                onClick={(slice: { status?: StatusFilter; payload?: { status?: StatusFilter } }) =>
+                  handleSliceClick(slice?.status ?? slice?.payload?.status ?? '')
+                }
               >
-                {pieData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.color} />
+                {pieData.map((entry) => (
+                  <Cell
+                    key={entry.status}
+                    fill={entry.color}
+                    opacity={filterStatus && filterStatus !== entry.status ? 0.35 : 1}
+                  />
                 ))}
               </Pie>
               <Tooltip />

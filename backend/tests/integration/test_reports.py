@@ -18,6 +18,29 @@ class TestSubmitReport:
         assert data["user_id"] == str(employee_user.id)
         assert data["reported_at"] is not None
 
+    async def test_report_content_includes_employee_id_and_timestamp(
+        self, client, employee_headers, employee_user, active_event
+    ):
+        """FEATURE-1: a submitted report carries the employee's id and a current
+        timestamp (回報內容應包含員工編號與當前時間戳記)."""
+        from datetime import datetime, timezone
+
+        before = datetime.now(timezone.utc)
+        r = await client.post(
+            f"/api/events/{str(active_event.id)}/report",
+            json={"status": "safe"},
+            headers=employee_headers,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["employee_id"] == employee_user.employee_id
+        assert data["reported_at"] is not None
+        reported_at = datetime.fromisoformat(data["reported_at"])
+        if reported_at.tzinfo is None:
+            reported_at = reported_at.replace(tzinfo=timezone.utc)
+        # The recorded timestamp is "current" — within a minute of the request.
+        assert abs((reported_at - before).total_seconds()) < 60
+
     async def test_submit_need_help_with_message(self, client, employee_headers, active_event):
         event_id = str(active_event.id)
         r = await client.post(

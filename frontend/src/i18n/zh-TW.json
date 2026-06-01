@@ -3,7 +3,8 @@
     "actions": "操作",
     "status": "狀態",
     "retry": "重試",
-    "close": "關閉"
+    "close": "關閉",
+    "cancel": "取消"
   },
   "app": {
     "title": "企業安全回報系統",
@@ -38,7 +39,10 @@
     "failedAmbiguous": "送出時發生錯誤，請回首頁確認狀態",
     "alreadyReported": "您已回報",
     "status": "您的狀態",
-    "updateHint": "想更新狀態？再次選擇即可"
+    "updateHint": "想更新狀態？再次選擇即可",
+    "confirmHelpTitle": "確認需要協助?",
+    "confirmHelpBody": "此動作會立即通知您的主管,請確認您確實需要協助,避免誤觸。",
+    "confirmHelpConfirm": "確認需要協助"
   },
   "status": {
     "safe": "安全",
