@@ -181,6 +181,13 @@ describe('ReportPage', () => {
       await waitFor(() => expect(screen.getByText('all clear')).toBeInTheDocument())
     })
 
+    // FEATURE-1: report content surfaces the employee id + timestamp.
+    it('shows the employee id and report timestamp', async () => {
+      renderPage()
+      await waitFor(() => screen.getByText('You have already reported'))
+      expect(screen.getByText(/E001/)).toBeInTheDocument()
+    })
+
     it('lets the employee submit a status update from the already-reported view', async () => {
       mockedSubmitReport.mockResolvedValue({ ...reportedSafe, status: 'need_help' })
       renderPage()

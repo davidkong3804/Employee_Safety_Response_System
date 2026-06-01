@@ -133,6 +133,13 @@ export default function ReportPage() {
           {myReport.message && (
             <p className="mt-4 text-gray-600 bg-gray-50 rounded-lg p-3">{myReport.message}</p>
           )}
+          {/* FEATURE-1: surface the employee id + report timestamp recorded with
+              this report so the employee can see their report content carries
+              their 員工編號 and 回報時間. */}
+          <p className="mt-3 text-xs text-gray-400">
+            {myReport.employee_id}
+            {myReport.reported_at ? ` · ${new Date(myReport.reported_at).toLocaleString()}` : ''}
+          </p>
           <p className="mt-6 text-sm text-gray-500">{t('report.updateHint')}</p>
         </div>
       )}
