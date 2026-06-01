@@ -22,6 +22,9 @@ export default function ReportPage() {
   const [submitted, setSubmitted] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState(false)
+  // FEATURE-2: guard the "Need Help" action behind an explicit confirmation so
+  // an accidental tap doesn't dispatch a medical-assistance request.
+  const [confirmHelp, setConfirmHelp] = useState(false)
 
   useEffect(() => {
     if (!eventId) return
@@ -145,7 +148,7 @@ export default function ReportPage() {
         </button>
         <div className="flex flex-col gap-3">
           <button
-            onClick={() => handleReport('need_help')}
+            onClick={() => setConfirmHelp(true)}
             disabled={loading || submitted}
             className="w-full aspect-square rounded-2xl bg-red-500 text-white text-2xl font-bold shadow-xl hover:bg-red-600 active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center justify-center gap-3"
           >
@@ -161,6 +164,35 @@ export default function ReportPage() {
           />
         </div>
       </div>
+
+      {confirmHelp && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-gray-100">
+            <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-950 text-center mb-2">{t('report.confirmHelpTitle')}</h3>
+            <p className="text-sm text-gray-500 text-center mb-6 leading-relaxed">{t('report.confirmHelpBody')}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setConfirmHelp(false)}
+                className="py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmHelp(false)
+                  handleReport('need_help')
+                }}
+                className="py-3 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition"
+              >
+                {t('report.confirmHelpConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
