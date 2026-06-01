@@ -57,8 +57,16 @@ export default function Dashboard() {
     listEvents()
       .then((evts) => {
         setEvents(evts)
-        const active = evts.find((e) => e.status === 'active')
-        if (active) setSelectedEventId(active.id)
+        // Prefer an active event, but fall back to the most-recent event so the
+        // dashboard still renders when nothing is currently active. Without this
+        // fallback `selectedEventId` stayed '' whenever no event was active →
+        // `reloadAll` early-returned → blank dashboard ("死白一片"), while the
+        // controlled <select value=""> misleadingly showed the first <option>
+        // (a value that matches no option falls back to the first one in the DOM).
+        // The events list is ordered active-first then most-recent, so evts[0]
+        // is the natural default. (BUG-0)
+        const initial = evts.find((e) => e.status === 'active') ?? evts[0]
+        if (initial) setSelectedEventId(initial.id)
       })
       .finally(() => setLoading(false))
   }, [])

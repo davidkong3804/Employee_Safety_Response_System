@@ -16,23 +16,26 @@ Guiding rules:
 ## 🐞 BUG-0 — Manager dashboard renders blank ("死白一片") on first mount
 
 **Symptom:** Login as M001 → `/dashboard` blank; switching event and back, or Home→back, fixes it.
-**Hypothesis:** Recharts `ResponsiveContainer` measures 0×0 on first paint (layout not settled) →
-charts render empty; a later state change forces re-measure. Possibly an uncaught render error that
-escapes below the root `ErrorBoundary`. The "fixed by re-select / remount-after-settle" pattern = a
-first-mount timing issue, not a deterministic crash.
 
-**Plan:**
-1. **Reproduce** with `pnpm dev` pointed at the live backend (port-forward backend→:8000), login M001,
-   watch console for the actual error / blank charts. Confirm root cause before fixing.
-2. **Fix** (robust, covers both possibilities):
-   - Gate chart rendering on data presence (`stats && <Pie…>`, `deptStats.length > 0 && <Bar…>`), so
-     `ResponsiveContainer` mounts only with real dimensions/data.
-   - Wrap the dashboard body in a local `ErrorBoundary` so any future render error degrades to a
-     fallback panel, never a white screen.
-   - If repro shows a ResponsiveContainer measuring issue, add explicit chart container height and a
-     `key` tied to `selectedEventId` to force a clean re-mount with data.
-3. **Tests** (`frontend/src/__tests__/pages/Dashboard.test.tsx`): renders without crashing for a
-   manager given MSW stats; charts appear after data loads; remount (unmount→mount) still renders.
+**ACTUAL ROOT CAUSE (confirmed by reproducing in-browser, not the ResponsiveContainer hypothesis):**
+`Dashboard.tsx`'s init effect only selected an event when an *active* one existed:
+`const active = evts.find(e => e.status === 'active'); if (active) setSelectedEventId(active.id)`.
+When **no event is active** (all closed — exactly M001's current data), `selectedEventId` stayed `''`,
+so `reloadAll` hit its `if (!selectedEventId) return` guard and never fetched → blank dashboard. The
+`<select value="">` *looked* like it had a selection only because a controlled select whose value
+matches no `<option>` falls back to showing the first option in the DOM (its `.value` even reports that
+id), which is why "switch event and back" — a real `onChange` that sets a valid id — fixed it.
+Verified: `GET /api/events` returned 4 events all `status:"closed"`; `/stats` etc. all returned 200.
+**Not** a crash (no console error), **not** a ResponsiveContainer measuring issue.
+
+**Fix (applied):** default to the most-recent event when none is active —
+`const initial = evts.find(e => e.status === 'active') ?? evts[0]; if (initial) setSelectedEventId(initial.id)`.
+The events list is ordered active-first then most-recent, so `evts[0]` is the natural default.
+
+**Tests (done):** `frontend/src/__tests__/pages/Dashboard.test.tsx` — (1) no active event → falls back
+to first event, fetches its stats, KPI numbers render; (2) prefers an active event when present; (3)
+zero events → no stats fetch. All pass; full suite 92/92 green. Browser-verified the dashboard now
+renders KPIs + charts + list on first mount.
 
 ---
 
