@@ -162,13 +162,20 @@ export default function Dashboard() {
     )
   }
 
-  const pieData = stats
+  // FEATURE-3: each slice carries its status so clicking it filters the
+  // employee list to that category (toggle off by clicking the active slice).
+  const pieData: { name: string; value: number; color: string; status: StatusFilter }[] = stats
     ? [
-        { name: t('status.safe'), value: stats.safe, color: COLORS.safe },
-        { name: t('status.need_help'), value: stats.need_help, color: COLORS.need_help },
-        { name: t('status.unreported'), value: stats.unreported, color: COLORS.unreported },
+        { name: t('status.safe'), value: stats.safe, color: COLORS.safe, status: 'safe' },
+        { name: t('status.need_help'), value: stats.need_help, color: COLORS.need_help, status: 'need_help' },
+        { name: t('status.unreported'), value: stats.unreported, color: COLORS.unreported, status: 'unreported' },
       ]
     : []
+
+  const handleSliceClick = (status: StatusFilter) => {
+    if (!status) return
+    setFilterStatus((cur) => (cur === status ? '' : status))
+  }
 
   const barData = deptStats.map((d) => ({
     name: d.department,
@@ -246,9 +253,17 @@ export default function Dashboard() {
                 paddingAngle={3}
                 dataKey="value"
                 label={({ name, value }) => `${name}: ${value}`}
+                cursor="pointer"
+                onClick={(slice: { status?: StatusFilter; payload?: { status?: StatusFilter } }) =>
+                  handleSliceClick(slice?.status ?? slice?.payload?.status ?? '')
+                }
               >
-                {pieData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.color} />
+                {pieData.map((entry) => (
+                  <Cell
+                    key={entry.status}
+                    fill={entry.color}
+                    opacity={filterStatus && filterStatus !== entry.status ? 0.35 : 1}
+                  />
                 ))}
               </Pie>
               <Tooltip />
