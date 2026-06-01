@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 480
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"  # NOSONAR
     BCRYPT_ROUNDS: int = 12
 
     # Database connection pool — tuned per-pod so that

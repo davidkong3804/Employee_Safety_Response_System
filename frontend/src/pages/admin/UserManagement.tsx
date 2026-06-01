@@ -26,7 +26,7 @@ export default function UserManagement() {
   const [filterRole, setFilterRole] = useState('')
   
   const initialForm = {
-    employee_id: '', name: '', email: '', password: 'password123',
+    employee_id: '', name: '', email: '', password: '',
     role: 'employee' as 'employee' | 'manager' | 'admin', department: '', facility: '', phone: '',
   }
   const [form, setForm] = useState(initialForm)
