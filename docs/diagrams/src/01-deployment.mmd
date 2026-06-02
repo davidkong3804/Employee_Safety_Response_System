@@ -1,0 +1,71 @@
+---
+title: Cloud Native Architecture · GKE Deployment
+---
+flowchart LR
+    USER["👤 <b>User Browser</b><br/>HTTPS"]:::ext
+
+    subgraph GKE["@@kubernetes|16@@ GKE Cluster · safety-system"]
+      direction TB
+      ING["@@googlecloud|18@@ <b>GKE Ingress</b> · Cloud LB<br/>Static IP · Managed TLS"]:::edge
+      subgraph APP["Application Tier"]
+        direction LR
+        FE["@@react|20@@@@nginx|18@@ <b>Frontend Pods</b><br/>nginx + React · HPA 2–10"]:::app
+        BE["@@fastapi|20@@ <b>Backend Pods</b><br/>FastAPI · NEG · HPA 3–60"]:::appcore
+      end
+      subgraph DBT["DB Connection Tier"]
+        direction LR
+        PGB["@@postgresql|18@@ <b>PgBouncer</b> ×3→6<br/>txn pool · 2000→100"]:::proxy
+        CSP["@@googlecloud|16@@ <b>cloud-sql-proxy</b> ×2<br/>Workload Identity"]:::proxy
+        CSPR["@@googlecloud|16@@ <b>cloud-sql-proxy·replica</b> ×2<br/>read-only"]:::proxy
+      end
+      subgraph OBS["Observability"]
+        direction LR
+        PROM["@@prometheus|16@@ <b>Prometheus</b> · 15s"]:::obs
+        GRAF["@@grafana|16@@ <b>Grafana</b><br/>16 panels · 5 alerts"]:::obs
+      end
+    end
+
+    subgraph MNG["🔒 Managed Services · Private IP"]
+      direction TB
+      MEM["@@redis|21@@ <b>Memorystore Redis</b><br/>write buffer · stats cache · rate-limit"]:::redis
+      PRIM["@@postgresql|21@@ <b>Cloud SQL HA · PRIMARY</b><br/>PostgreSQL 16 · Regional"]:::dbprim
+      REP["@@postgresql|21@@ <b>Cloud SQL · READ REPLICA</b><br/>safety-db-replica"]:::dbrep
+    end
+
+    subgraph CICD["CI / CD"]
+      direction TB
+      GHA["@@github|16@@ <b>GitHub Actions</b>"]:::ext
+      AR["@@googlecloud|15@@ <b>Artifact Registry</b>"]:::ext
+    end
+
+    USER -->|HTTPS| ING
+    ING -->|"path /"| FE
+    ING -->|"path /api/*"| BE
+    BE ==>|"① write + drain flush · 5432"| PGB
+    PGB --> CSP
+    CSP ==>|"TLS · private IP"| PRIM
+    BE <==>|"② buffer + stats cache · 6379"| MEM
+    BE -.->|"② read miss (5s TTL)"| CSPR
+    CSPR --> REP
+    PRIM -. "streaming replication" .-> REP
+    PROM -->|"/metrics"| BE
+    PROM --> GRAF
+    GHA -->|"docker push"| AR
+    AR -. "image pull" .-> BE
+
+    classDef ext fill:#F1F5F9,stroke:#64748B,stroke-width:1.5px,color:#0F2A43;
+    classDef edge fill:#E0E7FF,stroke:#6366F1,stroke-width:2px,color:#0F2A43;
+    classDef app fill:#ECFDF5,stroke:#10B981,stroke-width:1.5px,color:#064E3B;
+    classDef appcore fill:#D1FAE5,stroke:#059669,stroke-width:2.5px,color:#064E3B;
+    classDef proxy fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A;
+    classDef obs fill:#FFF7ED,stroke:#F59E0B,stroke-width:1.5px,color:#7C2D12;
+    classDef dbprim fill:#DBEAFE,stroke:#2563EB,stroke-width:2.5px,color:#1E3A8A;
+    classDef dbrep fill:#CFFAFE,stroke:#0891B2,stroke-width:2px,color:#155E75;
+    classDef redis fill:#FEE2E2,stroke:#EF4444,stroke-width:2.5px,color:#7F1D1D;
+
+    style GKE fill:#FAFCFF,stroke:#94A3B8,stroke-width:2px,color:#334155
+    style APP fill:#F0FDF4,stroke:#86EFAC,stroke-width:1.5px,color:#166534
+    style DBT fill:#F0F7FF,stroke:#93C5FD,stroke-width:1.5px,color:#1E40AF
+    style OBS fill:#FFFBEB,stroke:#FCD34D,stroke-width:1.5px,color:#92400E
+    style MNG fill:#F8FAFC,stroke:#94A3B8,stroke-width:2px,color:#334155
+    style CICD fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1.5px,color:#475569

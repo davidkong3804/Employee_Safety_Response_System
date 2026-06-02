@@ -1,0 +1,33 @@
+---
+title: 核心流程② · 主管催報未回報員工
+---
+sequenceDiagram
+    autonumber
+    actor MGR as 🧑‍💼 主管 / 管理員 (SPA)
+    participant BE as ⚡ Backend Pod
+    participant R as 🟥 Redis (limiter)
+    participant PG as 🗄️ PostgreSQL
+
+    MGR->>BE: POST /events/{id}/remind
+    BE->>R: 檢查 remind_limiter (1 分鐘 5 次)
+
+    alt 超過速率上限
+        R-->>BE: 已達上限
+        BE-->>MGR: 429 Too Many Requests
+    else 通過
+        R-->>BE: OK
+        Note over BE,PG: 權限分流查未回報者
+        alt admin
+            BE->>PG: 查「全廠」未回報 (status = null)
+        else manager
+            BE->>PG: 只查本部門 (department_snapshot = 自己部門)
+        end
+        PG-->>BE: 未回報名單 (N 人)
+
+        Note over BE,PG: 兩階段批次寫入 — N 人壓成固定 2 句 SQL
+        BE->>PG: ① UPDATE 既有 reminders (reminder_count += 1)
+        BE->>PG: ② INSERT 新 reminders
+        BE-->>MGR: 200 已提醒 N 人
+    end
+
+    Note over MGR,PG: 未來可串接 FCM / APNs 推播 · 簡訊 · 語音外撥

@@ -1,0 +1,30 @@
+%% 簡報第 5 頁 — 系統架構圖 (Modular Monolith 邏輯視圖)
+%% 已修正:讀路徑先查 Redis 統計快取 → miss 才打讀副本;Drainer 是每個 backend pod 內的 asyncio task
+flowchart TB
+    BROWSER["Web 瀏覽器 · 員工 / 主管 / 管理員"]
+    SPA["React + Vite SPA · RBAC 路由 · i18n"]
+    GW["FastAPI · API 入口 · JWT 驗證 · Rate Limiter"]
+
+    subgraph MODS["業務模組 (Modular Monolith)"]
+        direction LR
+        M1["Auth"]
+        M2["Events"]
+        M3["Reports"]
+        M4["Users"]
+        M5["Notifications"]
+    end
+
+    REDIS["Redis<br/>① 寫入緩衝 ② 統計快取(5s) ③ 催報限流"]
+    DRAIN["Background Drainer<br/>每個 backend pod 一個 asyncio task · 每 2s 批次 flush"]
+    PG["PostgreSQL · PRIMARY<br/>users · events · safety_reports · reminders"]
+    RREP["PostgreSQL · READ REPLICA<br/>儀表板高頻讀"]
+
+    BROWSER -->|HTTPS| SPA
+    SPA -->|"REST /api"| GW
+    GW --> MODS
+    MODS -->|"報平安寫 → 緩衝 / 儀表板讀 → 快取命中"| REDIS
+    MODS -->|"一般寫 (建/改事件)"| PG
+    REDIS -.->|"讀 miss"| RREP
+    REDIS --> DRAIN
+    DRAIN -->|"batch UPDATE"| PG
+    PG -. "streaming replication" .-> RREP

@@ -1,0 +1,36 @@
+---
+title: 系統架構圖 · Modular Monolith (Logical)
+---
+flowchart TB
+    BROWSER["🌐 <b>Web 瀏覽器</b> · 員工 / 主管 / 管理員"]:::ext
+    SPA["@@react|24@@@@vite|22@@ <b>React + Vite SPA</b> · RBAC 路由 · i18n 多語言"]:::app
+    GW["@@fastapi|24@@ <b>FastAPI · API 入口</b> · JWT 驗證 · Rate Limiter"]:::appcore
+
+    M1["🔐 <b>Auth</b><br/>登入 · JWT"]:::mod
+    M2["📅 <b>Events</b><br/>事件 · 催報"]:::mod
+    M3["📊 <b>Reports</b><br/>回報 · 統計"]:::mod
+    M4["👥 <b>Users</b><br/>使用者"]:::mod
+    M5["🔔 <b>Notifications</b><br/>提醒"]:::mod
+
+    REDIS["@@redis|26@@ <b>Redis</b> — ① 寫入緩衝 · ② 統計快取 (5s) · ③ 催報限流"]:::redis
+    DRAIN["⚙️ <b>Background Drainer</b> · 每個 backend pod 一個 asyncio task · 每 2s 批次 flush"]:::worker
+    PG["@@postgresql|26@@ <b>PostgreSQL · PRIMARY</b><br/>users · events · safety_reports · reminders"]:::dbprim
+    RREP["@@postgresql|26@@ <b>READ REPLICA</b><br/>儀表板高頻讀"]:::dbrep
+
+    BROWSER -->|HTTPS| SPA
+    SPA -->|"REST /api"| GW
+    GW --> M1 & M2 & M3 & M4 & M5
+    M3 ==>|"寫緩衝 · 讀快取"| REDIS
+    M1 & M2 & M4 & M5 ==>|"讀 / 寫"| PG
+    REDIS ==> DRAIN ==>|"batch UPDATE"| PG
+    REDIS -.->|"讀 miss"| RREP
+    PG -. "replication" .-> RREP
+
+    classDef ext fill:#F1F5F9,stroke:#64748B,stroke-width:1.5px,color:#0F2A43;
+    classDef app fill:#ECFDF5,stroke:#10B981,stroke-width:2px,color:#064E3B;
+    classDef appcore fill:#D1FAE5,stroke:#059669,stroke-width:2.5px,color:#064E3B;
+    classDef mod fill:#FFFFFF,stroke:#10B981,stroke-width:2px,color:#065F46;
+    classDef redis fill:#FEE2E2,stroke:#EF4444,stroke-width:2.5px,color:#7F1D1D;
+    classDef worker fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
+    classDef dbprim fill:#DBEAFE,stroke:#2563EB,stroke-width:2.5px,color:#1E3A8A;
+    classDef dbrep fill:#CFFAFE,stroke:#0891B2,stroke-width:2px,color:#155E75;

@@ -1,0 +1,51 @@
+%% 簡報第 6 頁 — Cloud Native Architecture (GKE 部署拓樸)
+%% 已修正:讀路徑先走 Redis 快取(5s)→ miss 才打讀副本;讀副本不經 PgBouncer
+flowchart LR
+    USER["User Browser · HTTPS"]
+
+    subgraph GKE["GKE Cluster · safety-system"]
+      direction TB
+      ING["GKE Ingress · Cloud LB<br/>Static IP · Managed TLS"]
+      subgraph APP["Application Tier"]
+        direction LR
+        FE["Frontend Pods<br/>nginx + React · HPA 2–10"]
+        BE["Backend Pods<br/>FastAPI · NEG · HPA 3–60"]
+      end
+      subgraph DBT["DB Connection Tier"]
+        direction LR
+        PGB["PgBouncer ×3→6<br/>txn pooling · 2000→100 conns"]
+        CSP["cloud-sql-proxy ×2<br/>Workload Identity · TLS"]
+        CSPR["cloud-sql-proxy-replica ×2<br/>read-only"]
+      end
+      subgraph OBS["Observability"]
+        direction LR
+        PROM["Prometheus · scrape 15s"]
+        GRAF["Grafana · 16 panels · 5 alerts"]
+      end
+    end
+
+    subgraph MNG["Managed Services · Private IP"]
+      direction TB
+      MEM["Memorystore Redis<br/>write buffer · stats cache · rate-limit"]
+      PRIM["Cloud SQL HA · PRIMARY<br/>PostgreSQL 16 · Regional"]
+      REP["Cloud SQL · READ REPLICA<br/>safety-db-replica"]
+    end
+
+    GHA["GitHub Actions · CI/CD"]
+    AR["Artifact Registry"]
+
+    USER -->|HTTPS| ING
+    ING -->|"path /"| FE
+    ING -->|"path /api/*"| BE
+    BE -->|"① write + drain flush · 5432"| PGB
+    PGB --> CSP
+    CSP -->|"TLS · private IP"| PRIM
+    BE -->|"② read: 先查快取 6379"| MEM
+    MEM -.->|"cache miss (5s TTL)"| CSPR
+    CSPR --> REP
+    PRIM -. "streaming replication" .-> REP
+    PROM -->|"/metrics"| BE
+    PROM --> GRAF
+    GHA -->|"docker push"| AR
+    AR -. "image pull" .-> BE
+    AR -. "image pull" .-> FE

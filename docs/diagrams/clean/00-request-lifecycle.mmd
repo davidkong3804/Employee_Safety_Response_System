@@ -1,0 +1,22 @@
+%% 加分圖 — 一個 request 進來後的三條路徑 (Request Lifecycle)
+%% 重點:單一 request 全程在一個 pod;跨 pod 接力靠共享 Redis/Postgres;讀有 5s 快取 + 讀副本,主庫不被讀爆
+flowchart LR
+    USER["Client"]
+    LB["Ingress · LB<br/>挑一個 backend pod"]
+    BE["Backend Pod<br/>單一 request 全程在這一個 pod"]
+    REDIS["Redis<br/>buffer + stats cache"]
+    DRAIN["Drainer · 每 2s flush"]
+    PGB["PgBouncer"]
+    PRIM["Cloud SQL · PRIMARY"]
+    REP["Cloud SQL · READ REPLICA"]
+
+    USER -->|HTTPS| LB --> BE
+    BE -->|"① 讀: 先查快取 (5s)"| REDIS
+    BE -->|"② 報平安寫: 即回 200"| REDIS
+    BE -->|"③ 一般寫 (建/改事件)"| PGB
+    BE -.->|"降級: Redis 掛了 → 直寫主庫"| PGB
+    REDIS -->|"SCAN 待刷"| DRAIN
+    REDIS -.->|"cache miss"| REP
+    DRAIN -->|"batch UPDATE"| PGB
+    PGB --> PRIM
+    PRIM -. "replication" .-> REP

@@ -1,0 +1,33 @@
+---
+title: 一個 Request 進來後的三條路徑 (Request Lifecycle)
+---
+flowchart LR
+    USER["👤 Client"]:::ext
+    LB["@@googlecloud|22@@ <b>Ingress · LB</b><br/>挑一個 backend pod"]:::edge
+    BE["@@fastapi|26@@ <b>Backend Pod</b><br/>單一 request<br/>全程在這一個 pod"]:::appcore
+
+    REDIS["@@redis|26@@ <b>Redis</b><br/>buffer + cache"]:::redis
+    DRAIN["⚙️ <b>Drainer</b><br/>每 2s flush"]:::worker
+    PGB["@@postgresql|22@@ <b>PgBouncer</b>"]:::proxy
+    PRIM["@@postgresql|26@@ <b>PRIMARY</b>"]:::dbprim
+    REP["@@postgresql|26@@ <b>READ REPLICA</b>"]:::dbrep
+
+    USER -->|HTTPS| LB --> BE
+    BE -->|"① 讀: 先查快取 (5s)"| REDIS
+    BE ==>|"② 報平安寫: 即回 200"| REDIS
+    BE ==>|"③ 一般寫 (建/改事件)"| PGB
+    BE -.->|"降級: Redis 掛→直寫"| PGB
+    REDIS -->|"SCAN 待刷"| DRAIN
+    REDIS -.->|"cache miss"| REP
+    DRAIN ==>|"batch UPDATE"| PGB
+    PGB --> PRIM
+    PRIM -. "replication" .-> REP
+
+    classDef ext fill:#F1F5F9,stroke:#64748B,stroke-width:1.5px,color:#0F2A43;
+    classDef edge fill:#E0E7FF,stroke:#6366F1,stroke-width:2px,color:#0F2A43;
+    classDef appcore fill:#D1FAE5,stroke:#059669,stroke-width:2.5px,color:#064E3B;
+    classDef redis fill:#FEE2E2,stroke:#EF4444,stroke-width:2.5px,color:#7F1D1D;
+    classDef worker fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
+    classDef proxy fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A;
+    classDef dbprim fill:#DBEAFE,stroke:#2563EB,stroke-width:2.5px,color:#1E3A8A;
+    classDef dbrep fill:#CFFAFE,stroke:#0891B2,stroke-width:2px,color:#155E75;

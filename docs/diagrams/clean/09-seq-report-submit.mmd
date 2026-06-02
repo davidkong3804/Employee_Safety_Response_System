@@ -1,0 +1,33 @@
+%% 簡報第 9 頁 — 核心流程① 員工提交安全回報
+sequenceDiagram
+    autonumber
+    actor EMP as 員工 (SPA)
+    participant BE as Backend Pod
+    participant R as Redis
+    participant D as Drainer (每2s)
+    participant PG as PostgreSQL
+
+    Note over EMP,BE: 載入回報頁
+    EMP->>BE: GET /events/{id}/my-report
+    BE->>R: 先讀 write buffer (read-your-write)
+    R-->>BE: 緩衝命中 → 用緩衝值
+    BE->>PG: 緩衝沒有才查 DB
+    BE-->>EMP: 顯示目前狀態
+
+    Note over EMP,PG: 點「我是安全的 / 需要協助」
+    EMP->>BE: POST /events/{id}/report {status}
+    BE->>R: buffer_report() 寫 buf:report + 標記待刷 (TTL 60s)
+    R-->>BE: OK
+    BE-->>EMP: 200 立刻回 (毫秒級)
+
+    alt Redis 不可用 (降級)
+        BE->>PG: 直接 UPDATE safety_reports
+        Note right of BE: 回報絕不遺失
+    end
+
+    loop 每 2 秒
+        D->>R: SCAN buf:events_with_pending:*
+        R-->>D: 待刷事件清單
+        D->>PG: 一次 batch UPDATE 多筆回報
+        D->>R: 使該事件統計快取失效
+    end

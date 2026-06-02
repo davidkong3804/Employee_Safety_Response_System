@@ -1,0 +1,51 @@
+%% 簡報第 8 頁 — 資料模型 ER Diagram (4 張表)
+erDiagram
+    users ||--o{ safety_reports : "user_id (回報人)"
+    events ||--o{ safety_reports : "event_id"
+    users ||--o{ events : "created_by (建立者)"
+    users ||--o{ reminders : "user_id"
+    events ||--o{ reminders : "event_id"
+    users ||--o{ users : "manager_id (直屬主管)"
+
+    users {
+        UUID id PK
+        string employee_id UK
+        string name
+        string password_hash "bcrypt"
+        enum role "employee|manager|admin"
+        string department
+        string facility
+        UUID manager_id FK
+        boolean is_active "soft delete"
+        timestamp created_at
+    }
+    events {
+        UUID id PK
+        string title
+        string event_type
+        enum severity "low|medium|high|critical"
+        enum status "active|closed"
+        array facility "Postgres ARRAY 可限定廠區"
+        UUID created_by FK
+        timestamp closed_at
+        timestamp created_at
+    }
+    safety_reports {
+        UUID id PK
+        UUID event_id FK
+        UUID user_id FK
+        enum status "null=未回報 / safe / need_help"
+        text message
+        timestamp reported_at
+        string manager_id_snapshot "建立事件當下快照"
+        string department_snapshot "部門統計用"
+        string facility_snapshot
+    }
+    reminders {
+        UUID id PK
+        UUID event_id FK
+        UUID user_id FK
+        integer reminder_count "重複催報累加"
+        string department_snapshot
+        timestamp created_at
+    }
